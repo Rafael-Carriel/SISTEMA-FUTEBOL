@@ -185,9 +185,9 @@ function DraggablePlayer({
       const newX = ((e.clientX - fieldRect.left) / fieldRect.width) * 100;
       const newY = ((e.clientY - fieldRect.top) / fieldRect.height) * 100;
 
-      // Clamp to field bounds with small margin
-      const clampedX = Math.max(2, Math.min(98, flip ? 100 - newX : newX));
-      const clampedY = Math.max(2, Math.min(98, flip ? 100 - newY : newY));
+      // Clamp to field bounds with margin to prevent clipping at edges (border + player radius)
+      const clampedX = Math.max(5, Math.min(95, flip ? 100 - newX : newX));
+      const clampedY = Math.max(5, Math.min(95, flip ? 100 - newY : newY));
 
       setDragPos({ x: clampedX, y: clampedY });
     },
@@ -316,8 +316,8 @@ function PitchHalf({
   onDragEnd,
 }: PitchHalfProps) {
   return (
-    <div className="flex flex-col items-center gap-2">
-      <div className="flex items-center gap-2">
+    <div className="flex flex-col items-center gap-2 w-full max-w-[280px]">
+      <div className="flex items-center gap-2 w-full">
         <h4 className="text-xs font-black uppercase tracking-wider" style={{ color: teamColor }}>
           {teamName}
         </h4>
@@ -330,10 +330,9 @@ function PitchHalf({
         )}
       </div>
       <div
-        className="relative overflow-hidden"
+        className="relative overflow-hidden w-full"
         style={{
-          width: w,
-          height: h,
+          aspectRatio: `${w} / ${h}`,
           background: 'linear-gradient(180deg, #1a7a2e 0%, #0f4d1a 100%)',
           borderRadius: 14,
           border: `3px solid ${teamColor}`,
@@ -435,7 +434,8 @@ export function DraggablePitch({
   // Adjust field dimensions based on format
   const getDimensions = () => {
     if (compact) {
-      return format === 'F5' ? { w: 160, h: 200 } : format === 'F7' ? { w: 180, h: 260 } : { w: 200, h: 300 };
+      // Smaller dimensions for dialog preview to fit side-by-side
+      return format === 'F5' ? { w: 150, h: 220 } : format === 'F7' ? { w: 165, h: 240 } : { w: 175, h: 260 };
     }
     return format === 'F5' ? { w: 240, h: 320 } : format === 'F7' ? { w: 280, h: 400 } : { w: 320, h: 480 };
   };
@@ -443,7 +443,7 @@ export function DraggablePitch({
   const { w, h } = getDimensions();
 
   return (
-    <div className="grid grid-cols-2 gap-3 sm:gap-4">
+    <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
       <PitchHalf
         teamName={teamAName}
         teamColor={teamAColor}
