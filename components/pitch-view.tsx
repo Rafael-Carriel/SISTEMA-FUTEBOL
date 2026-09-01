@@ -147,15 +147,14 @@ interface PitchHalfProps {
 
 function PitchHalf({ teamName, teamColor, players, w, h, compact, flip, format }: PitchHalfProps) {
   return (
-    <div className="flex flex-col items-center gap-2">
-      <h4 className="text-xs font-black uppercase tracking-wider" style={{ color: teamColor }}>
+    <div className="flex flex-col items-center gap-2 w-full max-w-[280px]">
+      <h4 className="text-xs font-black uppercase tracking-wider w-full" style={{ color: teamColor }}>
         {teamName}
       </h4>
       <div
-        className="relative overflow-hidden"
+        className="relative overflow-hidden w-full"
         style={{
-          width: w,
-          height: h,
+          aspectRatio: `${w} / ${h}`,
           background: 'linear-gradient(180deg, #1a7a2e 0%, #0f4d1a 100%)',
           borderRadius: 14,
           border: `3px solid ${teamColor}`,
@@ -240,7 +239,7 @@ export function PitchView({
   const { w, h } = getDimensions();
 
   return (
-    <div className="grid grid-cols-2 gap-3 sm:gap-4">
+    <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
       <PitchHalf teamName={teamAName} teamColor={teamAColor} players={placedA} w={w} h={h} compact={compact} flip={false} format={format} />
       <PitchHalf teamName={teamBName} teamColor={teamBColor} players={placedB} w={w} h={h} compact={compact} flip={true} format={format} />
     </div>

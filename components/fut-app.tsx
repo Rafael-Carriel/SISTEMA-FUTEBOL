@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { arrayUnion, collection, doc, getDocs, increment, onSnapshot, setDoc, updateDoc, writeBatch } from 'firebase/firestore';
+import { arrayUnion, collection, deleteDoc, doc, getDocs, increment, onSnapshot, setDoc, updateDoc, writeBatch } from 'firebase/firestore';
 import { Activity, BadgeDollarSign, CalendarDays, Camera, Check, ChevronRight, CircleDollarSign, Download, Goal, ImageDown, LayoutDashboard, Medal, Menu, Plus, Save, Shield, ShieldCheck, Shirt, Sparkles, Swords, Target, Trophy, UserPlus, Users, WalletCards, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -101,6 +101,7 @@ export function FutApp() {
   const [dragPositions, setDragPositions] = useState<FieldPositions>({});
   const [showLiveManager, setShowLiveManager] = useState(false);
   const [exportFormat, setExportFormat] = useState<'png' | 'jpeg'>('png');
+  const [editingMatchId, setEditingMatchId] = useState<string | null>(null);
 
   /* ─── Firebase realtime ─── */
   useEffect(() => {
@@ -176,19 +177,71 @@ export function FutApp() {
 
   async function saveMatch() {
     if (matchForm.selected.length < 2) return showNotice('Selecione pelo menos dois jogadores.');
-    const id = crypto.randomUUID();
-    const teams = balancedTeamsSmart(matchForm.selected, (id) => playerById(id));
-    const hasPositions = Object.keys(dragPositions).length > 0;
-    const match: Match = {
-      id, title: matchForm.title || 'Fut da galera', venue: matchForm.venue, date: matchForm.date, time: matchForm.time,
-      status: 'scheduled', teamAName: 'Time Verde', teamBName: 'Time Branco',
-      teamA: teams.teamA, teamB: teams.teamB, scoreA: 0, scoreB: 0, events: [],
-      createdAt: new Date().toISOString(),
-      format: matchForm.format,
-      fieldPositions: hasPositions ? dragPositions : undefined,
-    };
-    try { await setDoc(doc(db, 'matches', id), match); } catch { setMatches((all) => [match, ...all]); }
-    setActiveMatchId(id); setDialog(null); setPreviewTeams(null); setDragPositions({}); setView('matches'); showNotice('Partida criada com times equilibrados.');
+    
+    if (editingMatchId) {
+      // Edit mode - update existing match
+      const teams = balancedTeamsSmart(matchForm.selected, (id) => playerById(id));
+      const hasPositions = Object.keys(dragPositions).length > 0;
+      const update: Partial<Match> = {
+        title: matchForm.title || 'Fut da galera',
+        venue: matchForm.venue,
+        date: matchForm.date,
+        time: matchForm.time,
+        format: matchForm.format,
+        teamA: teams.teamA,
+        teamB: teams.teamB,
+        fieldPositions: hasPositions ? dragPositions : undefined,
+      };
+      try { await updateDoc(doc(db, 'matches', editingMatchId), update); } catch { setMatches((all) => all.map((m) => m.id === editingMatchId ? { ...m, ...update } : m)); }
+      setDialog(null); setPreviewTeams(null); setDragPositions({}); setEditingMatchId(null); showNotice('Partida atualizada.');
+    } else {
+      // Create mode - new match
+      const id = crypto.randomUUID();
+      const teams = balancedTeamsSmart(matchForm.selected, (id) => playerById(id));
+      const hasPositions = Object.keys(dragPositions).length > 0;
+      const match: Match = {
+        id, title: matchForm.title || 'Fut da galera', venue: matchForm.venue, date: matchForm.date, time: matchForm.time,
+        status: 'scheduled', teamAName: 'Time Verde', teamBName: 'Time Branco',
+        teamA: teams.teamA, teamB: teams.teamB, scoreA: 0, scoreB: 0, events: [],
+        createdAt: new Date().toISOString(),
+        format: matchForm.format,
+        fieldPositions: hasPositions ? dragPositions : undefined,
+      };
+      try { await setDoc(doc(db, 'matches', id), match); } catch { setMatches((all) => [match, ...all]); }
+      setActiveMatchId(id); setDialog(null); setPreviewTeams(null); setDragPositions({}); setView('matches'); showNotice('Partida criada com times equilibrados.');
+    }
+  }
+
+  function openEditMatch(match: Match) {
+    const allPlayerIds = [...match.teamA, ...match.teamB];
+    setMatchForm({
+      title: match.title,
+      venue: match.venue,
+      date: match.date,
+      time: match.time,
+      selected: allPlayerIds,
+      format: match.format || 'F7',
+    });
+    setPreviewTeams({ teamA: match.teamA, teamB: match.teamB });
+    setDragPositions(match.fieldPositions || {});
+    setEditingMatchId(match.id);
+    setDialog('match');
+  }
+
+  async function deleteMatch(match: Match) {
+    const isLive = match.status === 'live';
+    const confirmMessage = isLive
+      ? 'Partida ao vivo será perdida permanentemente. Tem certeza?'
+      : 'Tem certeza que deseja excluir esta partida?';
+    if (!window.confirm(confirmMessage)) return;
+    
+    try { await deleteDoc(doc(db, 'matches', match.id)); } catch { setMatches((all) => all.filter((m) => m.id !== match.id)); }
+    setMatches((all) => all.filter((m) => m.id !== match.id));
+    if (activeMatchId === match.id) {
+      const remaining = matches.filter((m) => m.id !== match.id);
+      setActiveMatchId(remaining[0]?.id || '');
+    }
+    showNotice('Partida excluída.');
   }
 
   async function changeMatchStatus(match: Match, status: Match['status']) {
@@ -570,6 +623,16 @@ export function FutApp() {
             <p className="mt-1 text-xs text-muted-foreground">{formatDate(match.date)} · {match.time} · {match.venue}</p>
           </div>
           <div className="flex flex-wrap gap-2">
+            {/* Edit button - always visible except maybe live */}
+            {match.status !== 'live' && (
+              <Button variant="outline" size="sm" onClick={() => openEditMatch(match)}>
+                <span className="size-4">✏️</span> Editar
+              </Button>
+            )}
+            {/* Delete button - with extra confirmation for live matches */}
+            <Button variant="outline" size="sm" onClick={() => deleteMatch(match)} className="text-red-500 hover:bg-red-500/10 hover:text-red-500 border-red-500/30">
+              <span className="size-4">🗑️</span> Excluir
+            </Button>
             {match.status === 'scheduled' && (
               <Button onClick={() => changeMatchStatus(match, 'live')}><Swords /> Iniciar</Button>
             )}
@@ -867,10 +930,10 @@ export function FutApp() {
       </Dialog>
 
       {/* Match dialog (with balance preview + format selector + drag positions) */}
-      <Dialog open={dialog === 'match'} onOpenChange={(open) => { if (!open) { setDialog(null); setPreviewTeams(null); } }}>
-        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-xl">
-          <DialogHeader><DialogTitle>Nova partida</DialogTitle><DialogDescription>Selecione o formato e os confirmados; o sorteio inteligente equilibra por atributos.</DialogDescription></DialogHeader>
-          <div className="grid gap-4 sm:grid-cols-2">
+      <Dialog open={dialog === 'match'} onOpenChange={(open) => { if (!open) { setDialog(null); setPreviewTeams(null); setDragPositions({}); setEditingMatchId(null); } }}>
+        <DialogContent className="flex flex-col max-h-[88vh] sm:max-w-2xl">
+          <DialogHeader><DialogTitle>{editingMatchId ? 'Editar partida' : 'Nova partida'}</DialogTitle><DialogDescription>{editingMatchId ? 'Ajuste os detalhes e a escalação da partida.' : 'Selecione o formato e os confirmados; o sorteio inteligente equilibra por atributos.'}</DialogDescription></DialogHeader>
+          <div className="flex-1 overflow-y-auto grid gap-4 sm:grid-cols-2 pb-6">
             <label className="form-label sm:col-span-2">Nome<Input value={matchForm.title} onChange={(e) => setMatchForm({ ...matchForm, title: e.target.value })} className="form-control" /></label>
             <label className="form-label sm:col-span-2">Local<Input value={matchForm.venue} onChange={(e) => setMatchForm({ ...matchForm, venue: e.target.value })} className="form-control" /></label>
             <label className="form-label">Data<Input type="date" value={matchForm.date} onChange={(e) => setMatchForm({ ...matchForm, date: e.target.value })} className="form-control" /></label>
@@ -907,7 +970,7 @@ export function FutApp() {
 
             <div className="sm:col-span-2">
               <p className="form-label mb-2">Escalação · {matchForm.selected.length} confirmados</p>
-              <div className="roster">{players.map((player) => { const checked = matchForm.selected.includes(player.id); return <button key={player.id} onClick={() => { setPreviewTeams(null); setMatchForm((form) => ({ ...form, selected: checked ? form.selected.filter((id) => id !== player.id) : [...form.selected, player.id] })); }} className={checked ? 'checked' : ''}><i>{checked && <Check />}</i><PlayerAvatar player={player} size="sm" /><b>{player.nickname}</b><small>{calcOverall(player)}</small></button>; })}</div>
+              <div className="roster max-h-48 overflow-y-auto pr-1 grid grid-cols-2 sm:grid-cols-3 gap-2">{players.map((player) => { const checked = matchForm.selected.includes(player.id); return <button key={player.id} onClick={() => { setPreviewTeams(null); setMatchForm((form) => ({ ...form, selected: checked ? form.selected.filter((id) => id !== player.id) : [...form.selected, player.id] })); }} className={checked ? 'checked' : ''}><i>{checked && <Check />}</i><PlayerAvatar player={player} size="sm" /><b>{player.nickname}</b><small>{calcOverall(player)}</small></button>; })}</div>
             </div>
           </div>
 
@@ -947,9 +1010,9 @@ export function FutApp() {
             )}
           </div>
 
-          <DialogFooter>
-            <Button variant="outline" onClick={() => { setDialog(null); setPreviewTeams(null); setDragPositions({}); }}>Cancelar</Button>
-            <Button onClick={saveMatch}><Swords /> Montar times</Button>
+          <DialogFooter className="sticky bottom-0 bg-background/95 backdrop-blur-sm border-t mt-auto">
+            <Button variant="outline" onClick={() => { setDialog(null); setPreviewTeams(null); setDragPositions({}); setEditingMatchId(null); }}>Cancelar</Button>
+            <Button onClick={saveMatch}><Swords /> {editingMatchId ? 'Salvar alterações' : 'Montar times'}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
