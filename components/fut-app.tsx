@@ -2,15 +2,18 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { arrayUnion, collection, doc, getDocs, increment, onSnapshot, setDoc, updateDoc, writeBatch } from 'firebase/firestore';
-import { Activity, BadgeDollarSign, CalendarDays, Camera, Check, ChevronRight, CircleDollarSign, Goal, ImageDown, LayoutDashboard, Medal, Menu, Plus, Save, Shield, ShieldCheck, Shirt, Sparkles, Swords, Target, Trophy, UserPlus, Users, WalletCards, X } from 'lucide-react';
+import { Activity, BadgeDollarSign, CalendarDays, Camera, Check, ChevronRight, CircleDollarSign, Download, Goal, ImageDown, LayoutDashboard, Medal, Menu, Plus, Save, Shield, ShieldCheck, Shirt, Sparkles, Swords, Target, Trophy, UserPlus, Users, WalletCards, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { db } from '@/lib/firebase';
 import { demoMatches, demoPayments, demoPlayers } from '@/lib/demo-data';
-import type { Match, MatchEvent, Payment, Player, PlayerStats, Position } from '@/lib/fut-types';
+import type { FieldPositions, Match, MatchEvent, MatchEventType, MatchFormat, Payment, Player, PlayerStats, Position } from '@/lib/fut-types';
 import { PitchView } from '@/components/pitch-view';
+import { DraggablePitch } from '@/components/draggable-pitch';
+import { LiveManager } from '@/components/live-manager';
 import { balancedTeamsSmart, getTeamBalanceInfo } from '@/lib/team-balancer';
+import { exportLineup } from '@/lib/lineup-export';
 
 /* ─── constants & helpers ─── */
 type View = 'dashboard' | 'matches' | 'players' | 'rankings' | 'payments' | 'arts';
@@ -35,6 +38,12 @@ const viewTitles: Record<View, [string, string, string]> = {
   arts: ['Pronto para o grupo', 'Gerador de artes', 'Crie o destaque do mês e baixe a imagem pronta.'],
 };
 
+const FORMAT_OPTIONS: { value: MatchFormat; label: string; players: number }[] = [
+  { value: 'F5', label: 'Futsal (5)', players: 5 },
+  { value: 'F7', label: 'Fut7 (7)', players: 7 },
+  { value: 'F11', label: 'Campo (11)', players: 11 },
+];
+
 function initials(player?: Player) { return player ? (player.nickname || player.name).split(' ').slice(0, 2).map((part) => part[0]).join('').toUpperCase() : '?'; }
 function calcOverall(player: Player) { return Math.round((player.pace + player.shooting + player.passing + player.defending + player.physical) / 5); }
 function formatDate(value: string) { return new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: 'short' }).format(new Date(`${value}T12:00:00`)); }
@@ -47,7 +56,7 @@ function calculateStats(players: Player[], matches: Match[]): PlayerStats[] {
       if (!team) continue;
       appearances++;
       for (const event of match.events || []) {
-        if (event.type === 'goal' && event.playerId === player.id) goals++;
+        if (event.type === 'goal' && !event.isOwnGoal && event.playerId === player.id) goals++;
         if (event.type === 'goal' && event.assistPlayerId === player.id) assists++;
         if (event.type === 'save' && event.playerId === player.id) saves++;
       }
@@ -82,13 +91,16 @@ export function FutApp() {
   const [activePlayerId, setActivePlayerId] = useState(demoPlayers[0].id);
   const [notice, setNotice] = useState('');
   const [playerForm, setPlayerForm] = useState({ name: '', nickname: '', number: '10', position: 'ATA' as Position, photoUrl: '' });
-  const [matchForm, setMatchForm] = useState({ title: 'Fut das quintas', venue: 'Arena Gol de Placa', date: '2026-09-03', time: '21:00', selected: demoPlayers.map((p) => p.id) });
-  const [eventForm, setEventForm] = useState({ type: 'goal' as 'goal' | 'save', team: 'A' as 'A' | 'B', playerId: demoPlayers[0].id, assistPlayerId: '', minute: '1' });
+  const [matchForm, setMatchForm] = useState({ title: 'Fut das quintas', venue: 'Arena Gol de Placa', date: '2026-09-03', time: '21:00', selected: demoPlayers.map((p) => p.id), format: 'F7' as MatchFormat });
+  const [eventForm, setEventForm] = useState({ type: 'goal' as MatchEventType, team: 'A' as 'A' | 'B', playerId: demoPlayers[0].id, assistPlayerId: '', minute: '1' });
   const [artType, setArtType] = useState<'artilheiro' | 'assistente' | 'paredao' | 'craque'>('artilheiro');
   const [artPlayerId, setArtPlayerId] = useState(demoPlayers[0].id);
   const [artPhotoUrl, setArtPhotoUrl] = useState('');
   const [rankingTab, setRankingTab] = useState<RankingTab>('goals');
   const [previewTeams, setPreviewTeams] = useState<{ teamA: string[]; teamB: string[] } | null>(null);
+  const [dragPositions, setDragPositions] = useState<FieldPositions>({});
+  const [showLiveManager, setShowLiveManager] = useState(false);
+  const [exportFormat, setExportFormat] = useState<'png' | 'jpeg'>('png');
 
   /* ─── Firebase realtime ─── */
   useEffect(() => {
@@ -128,6 +140,11 @@ export function FutApp() {
   const playerById = (id?: string) => players.find((player) => player.id === id);
   const showNotice = (message: string) => setNotice(message);
 
+  const selectedFormat = FORMAT_OPTIONS.find((f) => f.value === matchForm.format) || FORMAT_OPTIONS[1];
+  const idealPerTeam = selectedFormat.players;
+  const totalSelected = matchForm.selected.length;
+  const playersShort = totalSelected < idealPerTeam * 2;
+
   /* ─── match preview teams (for dialog) ─── */
   const previewTeamAPlayers = useMemo(() => {
     const ids = previewTeams?.teamA ?? [];
@@ -145,6 +162,7 @@ export function FutApp() {
   function previewDraft() {
     if (matchForm.selected.length < 2) { showNotice('Selecione pelo menos 2 jogadores.'); return; }
     setPreviewTeams(balancedTeamsSmart(matchForm.selected, (id) => playerById(id)));
+    setDragPositions({});
   }
 
   /* ─── CRUD operations ─── */
@@ -160,37 +178,76 @@ export function FutApp() {
     if (matchForm.selected.length < 2) return showNotice('Selecione pelo menos dois jogadores.');
     const id = crypto.randomUUID();
     const teams = balancedTeamsSmart(matchForm.selected, (id) => playerById(id));
-    const match: Match = { id, title: matchForm.title || 'Fut da galera', venue: matchForm.venue, date: matchForm.date, time: matchForm.time, status: 'scheduled', teamAName: 'Time Verde', teamBName: 'Time Branco', teamA: teams.teamA, teamB: teams.teamB, scoreA: 0, scoreB: 0, events: [], createdAt: new Date().toISOString() };
+    const hasPositions = Object.keys(dragPositions).length > 0;
+    const match: Match = {
+      id, title: matchForm.title || 'Fut da galera', venue: matchForm.venue, date: matchForm.date, time: matchForm.time,
+      status: 'scheduled', teamAName: 'Time Verde', teamBName: 'Time Branco',
+      teamA: teams.teamA, teamB: teams.teamB, scoreA: 0, scoreB: 0, events: [],
+      createdAt: new Date().toISOString(),
+      format: matchForm.format,
+      fieldPositions: hasPositions ? dragPositions : undefined,
+    };
     try { await setDoc(doc(db, 'matches', id), match); } catch { setMatches((all) => [match, ...all]); }
-    setActiveMatchId(id); setDialog(null); setPreviewTeams(null); setView('matches'); showNotice('Partida criada com times equilibrados.');
+    setActiveMatchId(id); setDialog(null); setPreviewTeams(null); setDragPositions({}); setView('matches'); showNotice('Partida criada com times equilibrados.');
   }
 
   async function changeMatchStatus(match: Match, status: Match['status']) {
-    try { await updateDoc(doc(db, 'matches', match.id), { status }); } catch { setMatches((all) => all.map((item) => item.id === match.id ? { ...item, status } : item)); }
+    const update: Partial<Match> = { status };
+    if (status === 'live') update.startedAt = new Date().toISOString();
+    try { await updateDoc(doc(db, 'matches', match.id), update); } catch { setMatches((all) => all.map((item) => item.id === match.id ? { ...item, ...update } : item)); }
     showNotice(status === 'live' ? 'Partida iniciada. Bom jogo!' : 'Súmula finalizada e rankings atualizados.');
   }
 
-  function openEvent(match: Match, type: 'goal' | 'save') { setActiveMatchId(match.id); setEventForm({ type, team: 'A', playerId: match.teamA[0] || '', assistPlayerId: '', minute: String((match.events?.length || 0) + 1) }); setDialog('event'); }
+  function openEvent(match: Match, type: MatchEventType) {
+    setActiveMatchId(match.id);
+    setEventForm({ type, team: 'A', playerId: match.teamA[0] || '', assistPlayerId: '', minute: String((match.events?.length || 0) + 1) });
+    setDialog('event');
+  }
 
   async function saveEvent() {
     if (!activeMatch || !eventForm.playerId) return;
-    const event: MatchEvent = { id: crypto.randomUUID(), type: eventForm.type, playerId: eventForm.playerId, assistPlayerId: eventForm.type === 'goal' && eventForm.assistPlayerId ? eventForm.assistPlayerId : undefined, team: eventForm.team, minute: Number(eventForm.minute) || 1, createdAt: new Date().toISOString() };
+    const event: MatchEvent = {
+      id: crypto.randomUUID(), type: eventForm.type, playerId: eventForm.playerId,
+      assistPlayerId: eventForm.type === 'goal' && eventForm.assistPlayerId ? eventForm.assistPlayerId : undefined,
+      team: eventForm.team, minute: Number(eventForm.minute) || 1, createdAt: new Date().toISOString(),
+    };
+    const isGoal = event.type === 'goal' && !event.isOwnGoal;
     const scoreField = event.team === 'A' ? 'scoreA' : 'scoreB';
-    try { await updateDoc(doc(db, 'matches', activeMatch.id), { events: arrayUnion(event), ...(event.type === 'goal' ? { [scoreField]: increment(1) } : {}) }); }
-    catch { setMatches((all) => all.map((match) => match.id === activeMatch.id ? { ...match, events: [...match.events, event], scoreA: match.scoreA + (event.type === 'goal' && event.team === 'A' ? 1 : 0), scoreB: match.scoreB + (event.type === 'goal' && event.team === 'B' ? 1 : 0) } : match)); }
-    setDialog(null); showNotice(event.type === 'goal' ? 'Gol registrado!' : 'Defesa registrada!');
+    try { await updateDoc(doc(db, 'matches', activeMatch.id), { events: arrayUnion(event), ...(isGoal ? { [scoreField]: increment(1) } : {}) }); }
+    catch { setMatches((all) => all.map((match) => match.id === activeMatch.id ? { ...match, events: [...match.events, event], scoreA: match.scoreA + (isGoal && event.team === 'A' ? 1 : 0), scoreB: match.scoreB + (isGoal && event.team === 'B' ? 1 : 0) } : match)); }
+    setDialog(null); showNotice(isGoal ? 'Gol registrado!' : event.type === 'save' ? 'Defesa registrada!' : `${event.type} registrado!`);
   }
 
-  async function togglePayment(player: Player) {
-    const id = `${monthKey}_${player.id}`, current = payments.find((item) => item.id === id);
-    const next: Payment = { id, playerId: player.id, month: monthKey, amount: current?.amount || 40, paid: !current?.paid, paidAt: !current?.paid ? new Date().toISOString() : undefined };
-    try { await setDoc(doc(db, 'payments', id), next); } catch { /* demonstração */ }
-    setPayments((all) => [...all.filter((item) => item.id !== id), next]); showNotice(next.paid ? `${player.nickname} está em dia.` : `${player.nickname} ficou pendente.`);
+  /* ─── Live manager handlers ─── */
+  function handleLiveAddEvent(evt: Omit<MatchEvent, 'id' | 'createdAt'>) {
+    const event: MatchEvent = { ...evt, id: crypto.randomUUID(), createdAt: new Date().toISOString() };
+    const isGoal = event.type === 'goal';
+    const scoreField = event.team === 'A' ? 'scoreA' : 'scoreB';
+    try { updateDoc(doc(db, 'matches', activeMatchId), { events: arrayUnion(event), ...(isGoal ? { [scoreField]: increment(1) } : {}) }); } catch { /* offline fallback */ }
+    setMatches((all) => all.map((match) => match.id === activeMatchId ? { ...match, events: [...match.events, event], scoreA: match.scoreA + (isGoal && event.team === 'A' ? 1 : 0), scoreB: match.scoreB + (isGoal && event.team === 'B' ? 1 : 0) } : match));
   }
 
-  async function updateRating(player: Player, field: 'pace' | 'shooting' | 'passing' | 'defending' | 'physical', value: number) {
-    const updated = { ...player, [field]: value }; setPlayers((all) => all.map((item) => item.id === player.id ? updated : item));
-    try { await updateDoc(doc(db, 'players', player.id), { [field]: value }); } catch { /* demonstração */ }
+  function handleLiveRemoveEvent(eventId: string) {
+    const match = matches.find((m) => m.id === activeMatchId);
+    if (!match) return;
+    const event = match.events.find((e) => e.id === eventId);
+    if (!event) return;
+    const isGoal = event.type === 'goal';
+    const scoreField = event.team === 'A' ? 'scoreA' : 'scoreB';
+    const newEvents = match.events.filter((e) => e.id !== eventId);
+    try { updateDoc(doc(db, 'matches', activeMatchId), { events: newEvents, ...(isGoal ? { [scoreField]: increment(-1) } : {}) }); } catch { /* offline fallback */ }
+    setMatches((all) => all.map((m) => m.id === activeMatchId ? { ...m, events: newEvents, scoreA: m.scoreA + (isGoal && event.team === 'A' ? -1 : 0), scoreB: m.scoreB + (isGoal && event.team === 'B' ? -1 : 0) } : m));
+  }
+
+  function handleLiveFinish() {
+    changeMatchStatus(matches.find((m) => m.id === activeMatchId)!, 'finished');
+    setShowLiveManager(false);
+  }
+
+  /* ─── Export lineup ─── */
+  async function handleExportLineup(match: Match) {
+    await exportLineup(match, players, { format: exportFormat });
+    showNotice('Escalação exportada!');
   }
 
   /* ─── photo handling ─── */
@@ -326,44 +383,281 @@ export function FutApp() {
      VIEWS
      ═══════════════════════════════════════════ */
 
+  /* ─── PREMIUM DASHBOARD ─── */
   const dashboard = () => {
     const match = liveMatch || matches[0];
-    return <>{match && <ScoreCard match={match} players={players} onOpen={() => { setActiveMatchId(match.id); setView('matches'); }} />}<div className="mt-5 grid gap-5 xl:grid-cols-[1.25fr_.8fr]"><section className="panel"><div className="section-heading"><div><p className="eyebrow-muted">Setembro</p><h3>Artilharia do mês</h3></div><Medal className="size-5 text-primary" /></div><div className="mt-4 space-y-1">{leaderboard.slice(0, 4).map((item, index) => <button key={item.player.id} onClick={() => { setActivePlayerId(item.player.id); setDialog('playerCard'); }} className="rank-row"><span className="w-5 text-center text-xs font-black text-muted-foreground">{index + 1}</span><PlayerAvatar player={item.player} /><div className="min-w-0 flex-1"><p className="truncate font-extrabold">{item.player.nickname}</p><p className="text-xs text-muted-foreground">{item.appearances} jogos · {item.assists} assist.</p></div><div className="text-right"><p className="text-xl font-black">{item.goals}</p><p className="stat-label">gols</p></div></button>)}</div></section><section className="panel"><div className="section-heading"><div><p className="eyebrow-muted">Caixa de setembro</p><h3>{money.format(monthlyRevenue)}</h3></div><WalletCards className="size-5 text-primary" /></div><div className="mt-5 rounded-2xl bg-muted p-4"><div className="mb-3 flex justify-between text-xs font-bold"><span>{paidPayments.length} em dia</span><span className="text-muted-foreground">{players.length - paidPayments.length} pendentes</span></div><div className="h-2 overflow-hidden rounded-full bg-border"><div className="h-full rounded-full bg-primary" style={{ width: `${players.length ? paidPayments.length / players.length * 100 : 0}%` }} /></div></div><Button onClick={() => setView('payments')} className="mt-4 h-10 w-full rounded-xl font-extrabold" variant="outline">Ver mensalidades <ChevronRight className="size-4" /></Button></section></div></>;
+    const topScorers = [...stats].sort((a, b) => b.goals - a.goals).slice(0, 3);
+    return (
+      <div className="space-y-5">
+        {/* Hero Live Match Card */}
+        {match && (
+          <section
+            className="relative overflow-hidden rounded-[28px] border border-white/10 p-6 sm:p-8"
+            style={{
+              background: match.status === 'live'
+                ? 'linear-gradient(135deg, #0b1710 0%, #14271a 50%, #1a3d26 100%)'
+                : 'linear-gradient(135deg, #0b1710 0%, #14271a 100%)',
+            }}
+          >
+            {match.status === 'live' && (
+              <div className="absolute -right-8 -top-8 size-64 rounded-full bg-primary/10 blur-3xl" />
+            )}
+            <div className="relative">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  {match.status === 'live' ? (
+                    <span className="flex items-center gap-1.5 rounded-full bg-red-500 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-white">
+                      <span className="size-1.5 animate-pulse rounded-full bg-white" />
+                      AO VIVO
+                    </span>
+                  ) : (
+                    <span className="rounded-full bg-white/10 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-white/50">
+                      {match.status === 'finished' ? 'Encerrado' : 'Próximo jogo'}
+                    </span>
+                  )}
+                  {match.format && (
+                    <span className="rounded-full bg-primary/20 px-2.5 py-1 text-[10px] font-black text-primary">
+                      {match.format}
+                    </span>
+                  )}
+                </div>
+                <button
+                  onClick={() => { setActiveMatchId(match.id); setView('matches'); }}
+                  className="rounded-xl bg-white/10 px-3 py-1.5 text-xs font-bold text-white/60 transition hover:bg-white/15 hover:text-white"
+                >
+                  Abrir súmula →
+                </button>
+              </div>
+
+              {/* Giant Score */}
+              <div className="my-6 grid grid-cols-[1fr_auto_1fr] items-center gap-4 text-center">
+                <div className="text-right">
+                  <p className="text-xs font-black uppercase tracking-wider text-white/40">{match.teamAName}</p>
+                </div>
+                <div className="flex items-center gap-3 text-7xl font-black tabular-nums tracking-tighter text-white sm:text-8xl">
+                  <span>{match.scoreA}</span>
+                  <span className="text-white/15">—</span>
+                  <span>{match.scoreB}</span>
+                </div>
+                <div className="text-left">
+                  <p className="text-xs font-black uppercase tracking-wider text-white/40">{match.teamBName}</p>
+                </div>
+              </div>
+
+              {/* Info row */}
+              <div className="flex items-center justify-between text-xs text-white/40">
+                <span>{formatDate(match.date)} · {match.time}</span>
+                <span>{match.venue}</span>
+                {match.status === 'live' && (
+                  <span className="font-mono text-primary">{match.events?.length || 0} lances</span>
+                )}
+              </div>
+            </div>
+          </section>
+        )}
+
+        {/* Bento Grid */}
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {/* Artilharia */}
+          <section className="panel sm:col-span-1">
+            <div className="section-heading">
+              <div>
+                <p className="eyebrow-muted">Setembro</p>
+                <h3>Artilharia</h3>
+              </div>
+              <Medal className="size-5 text-primary" />
+            </div>
+            <div className="mt-4 flex gap-3">
+              {topScorers.map((item, index) => (
+                <button
+                  key={item.player.id}
+                  onClick={() => { setActivePlayerId(item.player.id); setDialog('playerCard'); }}
+                  className="flex flex-1 flex-col items-center gap-2 rounded-2xl bg-muted/50 p-3 transition hover:bg-muted"
+                >
+                  <span className="text-lg">{index === 0 ? '🥇' : index === 1 ? '🥈' : '🥉'}</span>
+                  <PlayerAvatar player={item.player} size="md" />
+                  <p className="truncate text-xs font-black">{item.player.nickname}</p>
+                  <p className="text-xl font-black tabular-nums text-primary">{item.goals}</p>
+                  <p className="stat-label">gols</p>
+                </button>
+              ))}
+              {topScorers.length === 0 && (
+                <p className="py-4 text-center text-sm text-muted-foreground">Nenhum gol registrado ainda.</p>
+              )}
+            </div>
+          </section>
+
+          {/* Caixa */}
+          <section className="panel sm:col-span-1">
+            <div className="section-heading">
+              <div>
+                <p className="eyebrow-muted">Caixa de setembro</p>
+                <h3>{money.format(monthlyRevenue)}</h3>
+              </div>
+              <WalletCards className="size-5 text-primary" />
+            </div>
+            <div className="mt-5 rounded-2xl bg-muted/50 p-4">
+              <div className="mb-3 flex justify-between text-xs font-bold">
+                <span>{paidPayments.length} em dia</span>
+                <span className="text-muted-foreground">{players.length - paidPayments.length} pendentes</span>
+              </div>
+              <div className="h-2.5 overflow-hidden rounded-full bg-border">
+                <div
+                  className="h-full rounded-full bg-gradient-to-r from-primary to-emerald-400 transition-all duration-500"
+                  style={{ width: `${players.length ? paidPayments.length / players.length * 100 : 0}%` }}
+                />
+              </div>
+            </div>
+            <Button onClick={() => setView('payments')} className="mt-4 h-10 w-full rounded-xl font-extrabold" variant="outline">
+              Ver mensalidades <ChevronRight className="size-4" />
+            </Button>
+          </section>
+
+          {/* Quick Rankings */}
+          <section className="panel sm:col-span-2 lg:col-span-1">
+            <div className="section-heading">
+              <div>
+                <p className="eyebrow-muted">Rankings rápidos</p>
+                <h3>Top jogadores</h3>
+              </div>
+              <Trophy className="size-5 text-primary" />
+            </div>
+            <div className="mt-4 space-y-1">
+              {[...stats].sort((a, b) => (b.goals + b.assists) - (a.goals + a.assists)).slice(0, 4).map((item, index) => (
+                <button
+                  key={item.player.id}
+                  onClick={() => { setActivePlayerId(item.player.id); setDialog('playerCard'); }}
+                  className="rank-row"
+                >
+                  <span className={`rank-number ${index === 0 ? 'top' : ''}`}>{index + 1}</span>
+                  <PlayerAvatar player={item.player} size="sm" />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate font-extrabold">{item.player.nickname}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {item.goals} gols · {item.assists} assist.
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-lg font-black tabular-nums">{item.goals + item.assists}</p>
+                    <p className="stat-label">partic.</p>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </section>
+        </div>
+      </div>
+    );
   };
 
-  /* ─── MATCHES VIEW (with PitchView) ─── */
+  /* ─── MATCHES VIEW (with PitchView + Live Manager + Export) ─── */
   const matchesView = () => <div className="space-y-5">{matches.map((match) => {
     const teamAPlayers = match.teamA.map((id) => playerById(id)).filter(Boolean) as Player[];
     const teamBPlayers = match.teamB.map((id) => playerById(id)).filter(Boolean) as Player[];
+    const isLive = match.status === 'live';
+    const showLive = isLive && showLiveManager && activeMatchId === match.id;
+
     return (
-      <section key={match.id} className={`panel ${match.status === 'live' ? 'ring-2 ring-primary/50' : ''}`}>
+      <section key={match.id} className={`panel ${isLive ? 'ring-2 ring-primary/50' : ''}`}>
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <div className="flex items-center gap-2"><span className={`status-dot ${match.status}`} /><p className="eyebrow-muted">{match.status === 'live' ? 'Ao vivo' : match.status === 'finished' ? 'Encerrado' : 'Agendado'}</p></div>
+            <div className="flex items-center gap-2">
+              <span className={`status-dot ${match.status}`} />
+              <p className="eyebrow-muted">{isLive ? 'Ao vivo' : match.status === 'finished' ? 'Encerrado' : 'Agendado'}</p>
+              {match.format && <span className="rounded-full bg-muted px-2 py-0.5 text-[9px] font-black">{match.format}</span>}
+            </div>
             <h3 className="mt-1 text-lg font-black">{match.title}</h3>
             <p className="mt-1 text-xs text-muted-foreground">{formatDate(match.date)} · {match.time} · {match.venue}</p>
           </div>
-          {match.status === 'scheduled' ? <Button onClick={() => changeMatchStatus(match, 'live')}><Swords /> Iniciar</Button> : match.status === 'live' ? <Button variant="outline" onClick={() => changeMatchStatus(match, 'finished')}><Check /> Encerrar</Button> : null}
+          <div className="flex flex-wrap gap-2">
+            {match.status === 'scheduled' && (
+              <Button onClick={() => changeMatchStatus(match, 'live')}><Swords /> Iniciar</Button>
+            )}
+            {isLive && !showLive && (
+              <Button onClick={() => { setActiveMatchId(match.id); setShowLiveManager(true); }} className="bg-emerald-600 hover:bg-emerald-700">
+                <Goal /> Gestor ao vivo
+              </Button>
+            )}
+            {isLive && showLive && (
+              <Button variant="outline" onClick={() => setShowLiveManager(false)}>Fechar gestor</Button>
+            )}
+            {/* Export button */}
+            {match.status !== 'scheduled' && (
+              <div className="flex items-center gap-1">
+                <select
+                  value={exportFormat}
+                  onChange={(e) => setExportFormat(e.target.value as 'png' | 'jpeg')}
+                  className="h-9 rounded-lg border border-input bg-background px-2 text-xs font-bold"
+                >
+                  <option value="png">PNG</option>
+                  <option value="jpeg">JPEG</option>
+                </select>
+                <Button variant="outline" size="sm" onClick={() => handleExportLineup(match)}>
+                  <Download className="size-4" />
+                </Button>
+              </div>
+            )}
+          </div>
         </div>
-        <div className="match-score">
-          <TeamSummary name={match.teamAName} ids={match.teamA} players={players} align="right" />
-          <strong>{match.scoreA}<i>—</i>{match.scoreB}</strong>
-          <TeamSummary name={match.teamBName} ids={match.teamB} players={players} align="left" />
-        </div>
-        {/* Pitch visualization */}
-        {teamAPlayers.length > 0 && teamBPlayers.length > 0 && (
-          <div className="mt-4">
-            <PitchView
-              teamA={teamAPlayers}
-              teamB={teamBPlayers}
-              teamAName={match.teamAName}
-              teamBName={match.teamBName}
-              compact={match.status !== 'finished'}
+
+        {/* Live Manager (inline) */}
+        {showLive && (
+          <div className="mt-5">
+            <LiveManager
+              match={match}
+              players={players}
+              onAddEvent={handleLiveAddEvent}
+              onRemoveEvent={handleLiveRemoveEvent}
+              onFinish={handleLiveFinish}
             />
           </div>
         )}
-        {match.status === 'live' && <div className="mt-4 grid gap-2 sm:grid-cols-2"><Button onClick={() => openEvent(match, 'goal')} className="h-11"><Goal /> Marcar gol</Button><Button onClick={() => openEvent(match, 'save')} variant="outline" className="h-11"><ShieldCheck /> Marcar defesa</Button></div>}
-        {match.events.length > 0 && <div className="mt-5 border-t pt-4"><p className="eyebrow-muted mb-3">Últimos lances</p><div className="grid gap-2 sm:grid-cols-2">{[...match.events].reverse().slice(0, 6).map((event) => <div key={event.id} className="event-row"><span>{event.type === 'goal' ? '⚽' : '🧤'}</span><b>{playerById(event.playerId)?.nickname}{event.assistPlayerId ? ` · assistência ${playerById(event.assistPlayerId)?.nickname}` : ''}</b><small>{event.minute}&apos;</small></div>)}</div></div>}
+
+        {/* Score (when not in live manager mode) */}
+        {!showLive && (
+          <>
+            <div className="match-score">
+              <TeamSummary name={match.teamAName} ids={match.teamA} players={players} align="right" />
+              <strong>{match.scoreA}<i>—</i>{match.scoreB}</strong>
+              <TeamSummary name={match.teamBName} ids={match.teamB} players={players} align="left" />
+            </div>
+            {/* Pitch visualization */}
+            {teamAPlayers.length > 0 && teamBPlayers.length > 0 && (
+              <div className="mt-4">
+                <PitchView
+                  teamA={teamAPlayers}
+                  teamB={teamBPlayers}
+                  teamAName={match.teamAName}
+                  teamBName={match.teamBName}
+                  compact={match.status !== 'finished'}
+                  format={match.format || 'F7'}
+                />
+              </div>
+            )}
+            {isLive && (
+              <div className="mt-4 grid gap-2 sm:grid-cols-2">
+                <Button onClick={() => openEvent(match, 'goal')} className="h-11"><Goal /> Marcar gol</Button>
+                <Button onClick={() => openEvent(match, 'save')} variant="outline" className="h-11"><ShieldCheck /> Marcar defesa</Button>
+              </div>
+            )}
+          </>
+        )}
+
+        {/* Events timeline */}
+        {match.events.length > 0 && !showLive && (
+          <div className="mt-5 border-t pt-4">
+            <p className="eyebrow-muted mb-3">Últimos lances</p>
+            <div className="grid gap-2 sm:grid-cols-2">
+              {[...match.events].reverse().slice(0, 6).map((event) => (
+                <div key={event.id} className="event-row">
+                  <span>{event.type === 'goal' ? (event.isOwnGoal ? '🤦' : '⚽') : event.type === 'save' ? '🧤' : event.type === 'yellow' ? '🟨' : event.type === 'red' ? '🟥' : '🔄'}</span>
+                  <b>{playerById(event.playerId)?.nickname}{event.assistPlayerId ? ` · assistência ${playerById(event.assistPlayerId)?.nickname}` : ''}</b>
+                  <small>{event.minute}&apos;</small>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </section>
     );
   })}</div>;
@@ -521,7 +815,7 @@ export function FutApp() {
             </div>
             <div>
               {view === 'players' && <Button variant="outline" onClick={() => setDialog('player')}><UserPlus /><span>Novo jogador</span></Button>}
-              <Button onClick={() => { setMatchForm((form) => ({ ...form, selected: players.map((player) => player.id) })); setPreviewTeams(null); setDialog('match'); }}><Plus /><span>Nova partida</span></Button>
+              <Button onClick={() => { setMatchForm((form) => ({ ...form, selected: players.map((player) => player.id) })); setPreviewTeams(null); setDragPositions({}); setDialog('match'); }}><Plus /><span>Nova partida</span></Button>
             </div>
           </header>
 
@@ -572,37 +866,71 @@ export function FutApp() {
         </DialogContent>
       </Dialog>
 
-      {/* Match dialog (with balance preview) */}
+      {/* Match dialog (with balance preview + format selector + drag positions) */}
       <Dialog open={dialog === 'match'} onOpenChange={(open) => { if (!open) { setDialog(null); setPreviewTeams(null); } }}>
         <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-xl">
-          <DialogHeader><DialogTitle>Nova partida</DialogTitle><DialogDescription>Selecione os confirmados; o sorteio inteligente equilibra por atributos.</DialogDescription></DialogHeader>
+          <DialogHeader><DialogTitle>Nova partida</DialogTitle><DialogDescription>Selecione o formato e os confirmados; o sorteio inteligente equilibra por atributos.</DialogDescription></DialogHeader>
           <div className="grid gap-4 sm:grid-cols-2">
             <label className="form-label sm:col-span-2">Nome<Input value={matchForm.title} onChange={(e) => setMatchForm({ ...matchForm, title: e.target.value })} className="form-control" /></label>
             <label className="form-label sm:col-span-2">Local<Input value={matchForm.venue} onChange={(e) => setMatchForm({ ...matchForm, venue: e.target.value })} className="form-control" /></label>
             <label className="form-label">Data<Input type="date" value={matchForm.date} onChange={(e) => setMatchForm({ ...matchForm, date: e.target.value })} className="form-control" /></label>
             <label className="form-label">Horário<Input type="time" value={matchForm.time} onChange={(e) => setMatchForm({ ...matchForm, time: e.target.value })} className="form-control" /></label>
+
+            {/* Format selector */}
+            <div className="sm:col-span-2">
+              <p className="form-label mb-2">Formato</p>
+              <div className="flex gap-2">
+                {FORMAT_OPTIONS.map((opt) => (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => setMatchForm({ ...matchForm, format: opt.value })}
+                    className={`flex-1 rounded-xl border-2 px-3 py-2.5 text-sm font-extrabold transition-all ${
+                      matchForm.format === opt.value
+                        ? 'border-primary bg-primary/10 text-primary'
+                        : 'border-border bg-muted/50 text-muted-foreground hover:border-muted-foreground/30'
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+              <p className="mt-1.5 text-xs text-muted-foreground">
+                {idealPerTeam} por time · {totalSelected} confirmados
+                {playersShort && (
+                  <span className="ml-1 font-bold text-amber-500">
+                    · Faltam {idealPerTeam * 2 - totalSelected} jogadores
+                  </span>
+                )}
+              </p>
+            </div>
+
             <div className="sm:col-span-2">
               <p className="form-label mb-2">Escalação · {matchForm.selected.length} confirmados</p>
               <div className="roster">{players.map((player) => { const checked = matchForm.selected.includes(player.id); return <button key={player.id} onClick={() => { setPreviewTeams(null); setMatchForm((form) => ({ ...form, selected: checked ? form.selected.filter((id) => id !== player.id) : [...form.selected, player.id] })); }} className={checked ? 'checked' : ''}><i>{checked && <Check />}</i><PlayerAvatar player={player} size="sm" /><b>{player.nickname}</b><small>{calcOverall(player)}</small></button>; })}</div>
             </div>
           </div>
 
-          {/* Balance preview */}
+          {/* Balance preview with draggable pitch */}
           <div className="sm:col-span-2">
             {!previewTeams ? (
-              <Button variant="outline" onClick={previewDraft} className="w-full h-11 mt-2"><Swords /> Visualizar sortecio</Button>
+              <Button variant="outline" onClick={previewDraft} className="w-full h-11 mt-2"><Swords /> Visualizar sorteio</Button>
             ) : (
               <div className="mt-3 rounded-2xl border border-border bg-muted/50 p-4">
                 <div className="flex items-center justify-between mb-3">
                   <p className="text-xs font-extrabold uppercase tracking-wider text-muted-foreground">Preview do sorteio</p>
-                  <button onClick={() => setPreviewTeams(null)} className="text-xs font-bold text-muted-foreground hover:text-foreground"><X className="inline size-3" /> Limpar</button>
+                  <button onClick={() => { setPreviewTeams(null); setDragPositions({}); }} className="text-xs font-bold text-muted-foreground hover:text-foreground"><X className="inline size-3" /> Limpar</button>
                 </div>
-                <PitchView
+                <DraggablePitch
                   teamA={previewTeamAPlayers}
                   teamB={previewTeamBPlayers}
                   teamAName="Time Verde"
                   teamBName="Time Branco"
                   compact
+                  format={matchForm.format}
+                  editable
+                  fieldPositions={dragPositions}
+                  onPositionsChange={setDragPositions}
                 />
                 {previewBalance && (
                   <div className="mt-3 text-center">
@@ -612,12 +940,15 @@ export function FutApp() {
                     <p className={`text-xs font-extrabold ${previewBalance.color}`}>{previewBalance.percentage}% — {previewBalance.label}</p>
                   </div>
                 )}
+                <p className="mt-2 text-center text-[10px] font-bold text-muted-foreground">
+                  Arraste os jogadores para ajustar a posição
+                </p>
               </div>
             )}
           </div>
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => { setDialog(null); setPreviewTeams(null); }}>Cancelar</Button>
+            <Button variant="outline" onClick={() => { setDialog(null); setPreviewTeams(null); setDragPositions({}); }}>Cancelar</Button>
             <Button onClick={saveMatch}><Swords /> Montar times</Button>
           </DialogFooter>
         </DialogContent>
@@ -626,7 +957,7 @@ export function FutApp() {
       {/* Event dialog */}
       <Dialog open={dialog === 'event'} onOpenChange={(open) => !open && setDialog(null)}>
         <DialogContent>
-          <DialogHeader><DialogTitle>{eventForm.type === 'goal' ? 'Registrar gol' : 'Registrar defesa'}</DialogTitle><DialogDescription>O lance atualiza a súmula e os rankings.</DialogDescription></DialogHeader>
+          <DialogHeader><DialogTitle>{eventForm.type === 'goal' ? 'Registrar gol' : eventForm.type === 'save' ? 'Registrar defesa' : `Registrar ${eventForm.type}`}</DialogTitle><DialogDescription>O lance atualiza a súmula e os rankings.</DialogDescription></DialogHeader>
           {activeMatch && <div className="space-y-4">
             <label className="form-label">Time<select value={eventForm.team} onChange={(e) => { const team = e.target.value as 'A' | 'B'; setEventForm({ ...eventForm, team, playerId: (team === 'A' ? activeMatch.teamA : activeMatch.teamB)[0] || '', assistPlayerId: '' }); }} className="form-control"><option value="A">{activeMatch.teamAName}</option><option value="B">{activeMatch.teamBName}</option></select></label>
             <label className="form-label">Jogador<select value={eventForm.playerId} onChange={(e) => setEventForm({ ...eventForm, playerId: e.target.value })} className="form-control">{(eventForm.team === 'A' ? activeMatch.teamA : activeMatch.teamB).map((id) => <option key={id} value={id}>{playerById(id)?.nickname}</option>)}</select></label>
