@@ -1,4 +1,4 @@
-import type { FieldPositions, Match, Player } from './fut-types';
+import type { FieldPositions, Match, Player, Position } from './fut-types';
 
 /* ─── default position layout (same as pitch-view) ─── */
 const POSITION_COORDS: Record<Position, { x: number; y: number }[]> = {
