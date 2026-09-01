@@ -276,4 +276,9 @@ body {
   .mobile-nav svg { @apply size-[17px]; }
   .notice { @apply fixed bottom-24 left-1/2 z-50 flex -translate-x-1/2 items-center gap-2 whitespace-nowrap rounded-2xl bg-[#0b1710] px-4 py-3 text-sm font-bold text-white shadow-2xl lg:bottom-6; }
   .notice svg { @apply size-4 text-primary; }
+
+  /* Ranking tabs */
+  .ranking-tab { @apply flex items-center gap-2 whitespace-nowrap rounded-xl px-4 py-2.5 text-sm font-extrabold transition-all; }
+  .ranking-tab.active { @apply bg-primary text-primary-foreground shadow-md; }
+  .ranking-tab:not(.active) { @apply bg-muted text-muted-foreground hover:bg-muted/80; }
 }
