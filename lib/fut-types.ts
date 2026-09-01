@@ -1,5 +1,7 @@
 export type Position = 'GOL' | 'ZAG' | 'MEI' | 'ATA';
 
+export type MatchFormat = 'F5' | 'F7' | 'F11';
+
 export type Player = {
   id: string;
   name: string;
@@ -15,15 +17,23 @@ export type Player = {
   createdAt: string;
 };
 
+export type MatchEventType = 'goal' | 'save' | 'frango' | 'yellow' | 'red' | 'substitution';
+
 export type MatchEvent = {
   id: string;
-  type: 'goal' | 'save';
+  type: MatchEventType;
   playerId: string;
   assistPlayerId?: string;
   team: 'A' | 'B';
   minute: number;
   createdAt: string;
+  // For substitution events
+  playerOutId?: string;
+  // For own goal / frango
+  isOwnGoal?: boolean;
 };
+
+export type FieldPositions = Record<string, { x: number; y: number }>;
 
 export type Match = {
   id: string;
@@ -40,6 +50,10 @@ export type Match = {
   scoreB: number;
   events: MatchEvent[];
   createdAt: string;
+  // New fields for v0.3
+  format?: MatchFormat;
+  fieldPositions?: FieldPositions;
+  startedAt?: string;
 };
 
 export type Payment = {
@@ -61,4 +75,13 @@ export type PlayerStats = {
   draws: number;
   losses: number;
   overall: number;
+};
+
+export type LineupExportOptions = {
+  format: 'png' | 'jpeg';
+  quality?: number;
+  width?: number;
+  height?: number;
+  includeNames?: boolean;
+  includeNumbers?: boolean;
 };

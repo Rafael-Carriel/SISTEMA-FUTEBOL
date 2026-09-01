@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo } from 'react';
-import type { Player, Position } from '@/lib/fut-types';
+import type { MatchFormat, Player, Position } from '@/lib/fut-types';
 
 /* ─── helpers ─── */
 function initials(player: Player): string {
@@ -13,36 +13,71 @@ function initials(player: Player): string {
     .toUpperCase();
 }
 
-/* ─── position layout coordinates ─── */
-const POSITION_COORDS: Record<Position, { x: number; y: number }[]> = {
-  GOL: [{ x: 50, y: 90 }],
-  ZAG: [
-    { x: 25, y: 74 },
-    { x: 50, y: 70 },
-    { x: 75, y: 74 },
-    { x: 15, y: 76 },
-    { x: 85, y: 76 },
-  ],
-  MEI: [
-    { x: 20, y: 52 },
-    { x: 50, y: 48 },
-    { x: 80, y: 52 },
-    { x: 35, y: 56 },
-    { x: 65, y: 56 },
-    { x: 10, y: 54 },
-    { x: 90, y: 54 },
-  ],
-  ATA: [
-    { x: 30, y: 26 },
-    { x: 50, y: 22 },
-    { x: 70, y: 26 },
-    { x: 40, y: 32 },
-    { x: 60, y: 32 },
-  ],
+/* ─── position layout coordinates by format ─── */
+const POSITION_COORDS: Record<MatchFormat, Record<Position, { x: number; y: number }[]>> = {
+  F5: {
+    GOL: [{ x: 50, y: 92 }],
+    ZAG: [{ x: 30, y: 70 }, { x: 70, y: 70 }],
+    MEI: [{ x: 50, y: 50 }],
+    ATA: [{ x: 30, y: 28 }, { x: 70, y: 28 }],
+  },
+  F7: {
+    GOL: [{ x: 50, y: 90 }],
+    ZAG: [
+      { x: 25, y: 74 },
+      { x: 50, y: 70 },
+      { x: 75, y: 74 },
+      { x: 15, y: 76 },
+      { x: 85, y: 76 },
+    ],
+    MEI: [
+      { x: 20, y: 52 },
+      { x: 50, y: 48 },
+      { x: 80, y: 52 },
+      { x: 35, y: 56 },
+      { x: 65, y: 56 },
+      { x: 10, y: 54 },
+      { x: 90, y: 54 },
+    ],
+    ATA: [
+      { x: 30, y: 26 },
+      { x: 50, y: 22 },
+      { x: 70, y: 26 },
+      { x: 40, y: 32 },
+      { x: 60, y: 32 },
+    ],
+  },
+  F11: {
+    GOL: [{ x: 50, y: 94 }],
+    ZAG: [
+      { x: 20, y: 76 },
+      { x: 40, y: 72 },
+      { x: 60, y: 72 },
+      { x: 80, y: 76 },
+      { x: 10, y: 78 },
+      { x: 90, y: 78 },
+    ],
+    MEI: [
+      { x: 25, y: 52 },
+      { x: 50, y: 48 },
+      { x: 75, y: 52 },
+      { x: 15, y: 56 },
+      { x: 85, y: 56 },
+      { x: 35, y: 58 },
+      { x: 65, y: 58 },
+    ],
+    ATA: [
+      { x: 30, y: 28 },
+      { x: 50, y: 24 },
+      { x: 70, y: 28 },
+      { x: 40, y: 34 },
+      { x: 60, y: 34 },
+    ],
+  },
 };
 
-function getPositionCoords(count: number, position: Position): { x: number; y: number }[] {
-  const base = POSITION_COORDS[position];
+function getPositionCoords(count: number, position: Position, format: MatchFormat): { x: number; y: number }[] {
+  const base = POSITION_COORDS[format][position];
   if (count <= base.length) return base.slice(0, count);
   const result = [...base];
   for (let i = 0; i < count - base.length; i++) {
@@ -52,13 +87,13 @@ function getPositionCoords(count: number, position: Position): { x: number; y: n
   return result;
 }
 
-function assignPositions(players: Player[]): Array<{ player: Player; x: number; y: number }> {
+function assignPositions(players: Player[], format: MatchFormat): Array<{ player: Player; x: number; y: number }> {
   const byPos: Record<Position, Player[]> = { GOL: [], ZAG: [], MEI: [], ATA: [] };
   players.forEach((p) => byPos[p.position].push(p));
 
   const result: Array<{ player: Player; x: number; y: number }> = [];
   for (const pos of ['GOL', 'ZAG', 'MEI', 'ATA'] as Position[]) {
-    const coords = getPositionCoords(byPos[pos].length, pos);
+    const coords = getPositionCoords(byPos[pos].length, pos, format);
     byPos[pos].forEach((player, idx) => {
       result.push({ player, x: coords[idx].x, y: coords[idx].y });
     });
@@ -67,11 +102,18 @@ function assignPositions(players: Player[]): Array<{ player: Player; x: number; 
 }
 
 /* ─── SVG field markings ─── */
-function FieldLines({ w, h, flip }: { w: number; h: number; flip: boolean }) {
+function FieldLines({ w, h, flip, format }: { w: number; h: number; flip: boolean; format: MatchFormat }) {
   const half = h / 2;
   const goalY = flip ? h - h * 0.18 : 0;
   const goalSmallY = flip ? h - h * 0.06 : 0;
   const penSpotY = flip ? h - h * 0.11 : h * 0.11;
+
+  // Adjust dimensions based on format
+  const penaltyWidth = format === 'F5' ? w * 0.9 : format === 'F7' ? w * 0.8 : w * 0.75;
+  const penaltyHeight = format === 'F5' ? h * 0.2 : format === 'F7' ? h * 0.18 : h * 0.16;
+  const goalWidth = format === 'F5' ? w * 0.6 : format === 'F7' ? w * 0.4 : w * 0.35;
+  const goalHeight = format === 'F5' ? h * 0.08 : format === 'F7' ? h * 0.06 : h * 0.05;
+  const centerCircleR = format === 'F5' ? w * 0.18 : format === 'F7' ? w * 0.14 : w * 0.12;
 
   return (
     <svg
@@ -81,16 +123,11 @@ function FieldLines({ w, h, flip }: { w: number; h: number; flip: boolean }) {
       preserveAspectRatio="none"
       style={{ position: 'absolute', top: 0, left: 0, pointerEvents: 'none' }}
     >
-      {/* half-way */}
       <line x1="0" y1={half} x2={w} y2={half} stroke="rgba(255,255,255,0.35)" strokeWidth="1.5" strokeDasharray="6,6" />
-      {/* center circle */}
-      <circle cx={w / 2} cy={half} r={w * 0.14} fill="none" stroke="rgba(255,255,255,0.35)" strokeWidth="1.5" />
+      <circle cx={w / 2} cy={half} r={centerCircleR} fill="none" stroke="rgba(255,255,255,0.35)" strokeWidth="1.5" />
       <circle cx={w / 2} cy={half} r="2.5" fill="rgba(255,255,255,0.5)" />
-      {/* penalty area */}
-      <rect x={w * 0.1} y={goalY} width={w * 0.8} height={h * 0.18} fill="none" stroke="rgba(255,255,255,0.35)" strokeWidth="1.5" />
-      {/* goal area */}
-      <rect x={w * 0.3} y={goalSmallY} width={w * 0.4} height={h * 0.06} fill="none" stroke="rgba(255,255,255,0.35)" strokeWidth="1.5" />
-      {/* pen spot */}
+      <rect x={(w - penaltyWidth) / 2} y={goalY} width={penaltyWidth} height={penaltyHeight} fill="none" stroke="rgba(255,255,255,0.35)" strokeWidth="1.5" />
+      <rect x={(w - goalWidth) / 2} y={goalSmallY} width={goalWidth} height={goalHeight} fill="none" stroke="rgba(255,255,255,0.35)" strokeWidth="1.5" />
       <circle cx={w / 2} cy={penSpotY} r="2.5" fill="rgba(255,255,255,0.5)" />
     </svg>
   );
@@ -105,9 +142,10 @@ interface PitchHalfProps {
   h: number;
   compact: boolean;
   flip: boolean;
+  format: MatchFormat;
 }
 
-function PitchHalf({ teamName, teamColor, players, w, h, compact, flip }: PitchHalfProps) {
+function PitchHalf({ teamName, teamColor, players, w, h, compact, flip, format }: PitchHalfProps) {
   return (
     <div className="flex flex-col items-center gap-2">
       <h4 className="text-xs font-black uppercase tracking-wider" style={{ color: teamColor }}>
@@ -124,7 +162,7 @@ function PitchHalf({ teamName, teamColor, players, w, h, compact, flip }: PitchH
           boxShadow: `0 0 0 1px ${teamColor}30, 0 8px 32px rgba(0,0,0,0.25)`,
         }}
       >
-        <FieldLines w={w} h={h} flip={flip} />
+        <FieldLines w={w} h={h} flip={flip} format={format} />
 
         {players.map(({ player, x, y }) => {
           const px = flip ? 100 - x : x;
@@ -175,6 +213,7 @@ interface PitchViewProps {
   teamAColor?: string;
   teamBColor?: string;
   compact?: boolean;
+  format?: MatchFormat;
 }
 
 export function PitchView({
@@ -185,17 +224,25 @@ export function PitchView({
   teamAColor = '#16a34a',
   teamBColor = '#3b82f6',
   compact = false,
+  format = 'F7',
 }: PitchViewProps) {
-  const placedA = useMemo(() => assignPositions(teamA), [teamA]);
-  const placedB = useMemo(() => assignPositions(teamB), [teamB]);
+  const placedA = useMemo(() => assignPositions(teamA, format), [teamA, format]);
+  const placedB = useMemo(() => assignPositions(teamB, format), [teamB, format]);
 
-  const w = compact ? 180 : 260;
-  const h = compact ? 280 : 400;
+  // Adjust dimensions based on format
+  const getDimensions = () => {
+    if (compact) {
+      return format === 'F5' ? { w: 160, h: 200 } : format === 'F7' ? { w: 180, h: 280 } : { w: 200, h: 320 };
+    }
+    return format === 'F5' ? { w: 240, h: 320 } : format === 'F7' ? { w: 260, h: 400 } : { w: 300, h: 480 };
+  };
+
+  const { w, h } = getDimensions();
 
   return (
     <div className="grid grid-cols-2 gap-3 sm:gap-4">
-      <PitchHalf teamName={teamAName} teamColor={teamAColor} players={placedA} w={w} h={h} compact={compact} flip={false} />
-      <PitchHalf teamName={teamBName} teamColor={teamBColor} players={placedB} w={w} h={h} compact={compact} flip={true} />
+      <PitchHalf teamName={teamAName} teamColor={teamAColor} players={placedA} w={w} h={h} compact={compact} flip={false} format={format} />
+      <PitchHalf teamName={teamBName} teamColor={teamBColor} players={placedB} w={w} h={h} compact={compact} flip={true} format={format} />
     </div>
   );
 }
