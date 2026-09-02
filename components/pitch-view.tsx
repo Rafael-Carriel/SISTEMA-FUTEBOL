@@ -11,6 +11,22 @@ function initials(player: Player): string {
   return base.slice(0, 2).toUpperCase();
 }
 
+function playerIdentity(player: Player): string {
+  return `${(player.nickname || player.name).trim().toLocaleLowerCase('pt-BR')}|${player.number}`;
+}
+
+function dedupePlayers(players: Player[], blocked = new Set<string>()): Player[] {
+  const ids = new Set<string>();
+  const people = new Set(blocked);
+  return players.filter((player) => {
+    const identity = playerIdentity(player);
+    if (ids.has(player.id) || people.has(identity)) return false;
+    ids.add(player.id);
+    people.add(identity);
+    return true;
+  });
+}
+
 /* ─── position layout coordinates by format ─── */
 const POSITION_COORDS: Record<MatchFormat, Record<Position, { x: number; y: number }[]>> = {
   F5: {
@@ -221,8 +237,11 @@ export function PitchView({
   compact = false,
   format = 'F7',
 }: PitchViewProps) {
-  const placedA = useMemo(() => assignPositions(teamA, format), [teamA, format]);
-  const placedB = useMemo(() => assignPositions(teamB, format), [teamB, format]);
+  const cleanTeamA = useMemo(() => dedupePlayers(teamA), [teamA]);
+  const blocked = useMemo(() => new Set(cleanTeamA.map(playerIdentity)), [cleanTeamA]);
+  const cleanTeamB = useMemo(() => dedupePlayers(teamB, blocked), [teamB, blocked]);
+  const placedA = useMemo(() => assignPositions(cleanTeamA, format), [cleanTeamA, format]);
+  const placedB = useMemo(() => assignPositions(cleanTeamB, format), [cleanTeamB, format]);
 
   // Adjust dimensions based on format
   const getDimensions = () => {

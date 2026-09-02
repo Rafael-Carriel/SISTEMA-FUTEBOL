@@ -257,6 +257,22 @@ body {
   .roster button > b { @apply min-w-0 flex-1 truncate text-sm; }
   .roster button > small { @apply text-xs font-black text-muted-foreground; }
 
+  .draft-trigger { @apply relative mt-2 flex w-full items-center gap-3 overflow-hidden rounded-2xl border border-primary/30 bg-[#0b1710] p-4 text-left text-white shadow-[0_16px_40px_rgba(11,23,16,.14)] transition hover:-translate-y-0.5 hover:border-primary; }
+  .draft-trigger:disabled { @apply cursor-wait; }
+  .draft-trigger-icon { @apply grid size-11 shrink-0 place-items-center rounded-xl bg-primary text-primary-foreground; }
+  .draft-trigger-icon svg { @apply size-5; }
+  .draft-trigger > span:nth-child(2) { @apply min-w-0 flex-1; }
+  .draft-trigger b { @apply block text-sm font-black; }
+  .draft-trigger small { @apply mt-0.5 block text-[10px] font-semibold text-white/45; }
+  .draft-trigger > svg { @apply size-5 text-white/30; }
+  .draft-trigger.drawing .draft-trigger-icon { animation: tactical-pulse .7s ease-in-out infinite; }
+  .draft-trigger.drawing::after { content: ''; @apply absolute inset-y-0 w-20 bg-gradient-to-r from-transparent via-white/10 to-transparent; animation: tactical-scan 1s linear infinite; }
+  .draft-result { animation: draft-reveal .5s cubic-bezier(.2,.9,.25,1) both; }
+  .balance-chip { @apply flex items-center gap-1 rounded-xl bg-emerald-100 px-3 py-2 text-[10px] font-black text-emerald-700; }
+  .balance-chip svg { @apply size-3.5; }
+  .lineup-team { min-width: 0; }
+  .lineup-player { opacity: 0; animation: player-drop .46s cubic-bezier(.2,.9,.25,1.2) forwards; }
+
   .art-preview { @apply relative aspect-[4/5] overflow-hidden rounded-[28px] bg-[#07100b] p-[7%] text-white shadow-2xl; }
   .art-preview::before { content: ''; @apply absolute -right-[18%] -top-[5%] size-[55%] rounded-full bg-primary/15 blur-3xl; }
   .art-brand { @apply relative flex items-center justify-between; }
@@ -281,4 +297,20 @@ body {
   .ranking-tab { @apply flex items-center gap-2 whitespace-nowrap rounded-xl px-4 py-2.5 text-sm font-extrabold transition-all; }
   .ranking-tab.active { @apply bg-primary text-primary-foreground shadow-md; }
   .ranking-tab:not(.active) { @apply bg-muted text-muted-foreground hover:bg-muted/80; }
+}
+
+@keyframes tactical-pulse {
+  0%, 100% { transform: scale(1) rotate(-6deg); box-shadow: 0 0 0 0 rgba(186,255,85,.25); }
+  50% { transform: scale(1.08) rotate(6deg); box-shadow: 0 0 0 10px rgba(186,255,85,0); }
+}
+
+@keyframes tactical-scan { from { left: -20%; } to { left: 110%; } }
+@keyframes draft-reveal { from { opacity: 0; transform: translateY(14px) scale(.985); } to { opacity: 1; transform: translateY(0) scale(1); } }
+@keyframes player-drop { from { opacity: 0; transform: translate(-50%, -64%) scale(.65); filter: blur(4px); } to { opacity: 1; transform: translate(-50%, -50%) scale(1); filter: blur(0); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .draft-trigger.drawing .draft-trigger-icon,
+  .draft-trigger.drawing::after,
+  .draft-result,
+  .lineup-player { animation: none; opacity: 1; }
 }

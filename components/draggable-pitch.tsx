@@ -12,6 +12,22 @@ function initials(player: Player): string {
   return base.slice(0, 2).toUpperCase();
 }
 
+function playerIdentity(player: Player): string {
+  return `${(player.nickname || player.name).trim().toLocaleLowerCase('pt-BR')}|${player.number}`;
+}
+
+function dedupePlayers(players: Player[], blocked = new Set<string>()): Player[] {
+  const seenIds = new Set<string>();
+  const seenPeople = new Set(blocked);
+  return players.filter((player) => {
+    const identity = playerIdentity(player);
+    if (seenIds.has(player.id) || seenPeople.has(identity)) return false;
+    seenIds.add(player.id);
+    seenPeople.add(identity);
+    return true;
+  });
+}
+
 /* ─── default position coordinates by format ─── */
 const DEFAULT_POSITIONS: Record<MatchFormat, Record<Position, { x: number; y: number }[]>> = {
   F5: {
@@ -46,8 +62,14 @@ function getDefaultPositions(
   for (const pos of ['GOL', 'ZAG', 'MEI', 'ATA'] as Position[]) {
     const posCoords = coords[pos];
     byPos[pos].forEach((player, idx) => {
-      const coord = posCoords[idx] || posCoords[posCoords.length - 1];
-      result.push({ player, x: coord.x, y: coord.y });
+      const coord = posCoords[idx % posCoords.length];
+      const extraRow = Math.floor(idx / posCoords.length);
+      const direction = extraRow % 2 === 0 ? 1 : -1;
+      result.push({
+        player,
+        x: Math.max(10, Math.min(90, coord.x + direction * extraRow * 9)),
+        y: Math.max(10, Math.min(94, coord.y + extraRow * 7)),
+      });
     });
   }
   return result;
@@ -138,6 +160,7 @@ interface DraggablePlayerProps {
   compact: boolean;
   flip: boolean;
   format: MatchFormat;
+  index: number;
 }
 
 function DraggablePlayer({
@@ -151,12 +174,13 @@ function DraggablePlayer({
   compact,
   flip,
   format,
+  index,
 }: DraggablePlayerProps) {
   const [isDragging, setIsDragging] = useState(false);
   const [dragPos, setDragPos] = useState<{ x: number; y: number } | null>(null);
   const playerRef = useRef<HTMLDivElement>(null);
 
-  const size = compact ? 36 : 48;
+  const size = compact ? 42 : 52;
   const nameFontSize = compact ? '10px' : '12px';
   const badgeSize = compact ? 16 : 20;
   const numberFontSize = compact ? '8px' : '9px';
@@ -222,7 +246,7 @@ function DraggablePlayer({
   return (
     <div
       ref={playerRef}
-      className="absolute flex flex-col items-center transition-transform duration-75"
+      className="lineup-player absolute flex flex-col items-center transition-transform duration-150"
       style={{
         left: `${displayX}%`,
         top: `${displayY}%`,
@@ -230,6 +254,7 @@ function DraggablePlayer({
         zIndex: isDragging ? 100 : 10,
         cursor: editable ? (isDragging ? 'grabbing' : 'grab') : 'default',
         touchAction: editable ? 'none' : 'auto',
+        animationDelay: `${120 + index * 75}ms`,
       }}
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
@@ -312,17 +337,21 @@ function PitchHalf({
   editable,
   onDragEnd,
 }: PitchHalfProps) {
+  const teamOverall = players.length
+    ? Math.round(players.reduce((sum, item) => sum + Math.round((item.player.pace + item.player.shooting + item.player.passing + item.player.defending + item.player.physical) / 5), 0) / players.length)
+    : 0;
   return (
-    <div className="flex flex-col items-center gap-2 w-full max-w-[280px]">
-      <div className="flex items-center gap-2 w-full">
-        <h4 className="text-xs font-black uppercase tracking-wider" style={{ color: teamColor }}>
-          {teamName}
-        </h4>
+    <div className="lineup-team flex w-full flex-col gap-3">
+      <div className="flex w-full items-center gap-2 rounded-xl border border-border bg-card px-3 py-2 shadow-sm">
+        <span className="size-2.5 rounded-full shadow-[0_0_12px_currentColor]" style={{ color: teamColor, background: teamColor }} />
+        <div className="min-w-0 flex-1">
+          <h4 className="truncate text-xs font-black uppercase tracking-wider" style={{ color: teamColor }}>{teamName}</h4>
+          <p className="text-[10px] font-bold text-muted-foreground">{players.length} jogadores · média {teamOverall}</p>
+        </div>
         {editable && (
-          <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-primary/10 text-primary text-[10px] font-medium">
+          <span className="flex items-center gap-1 rounded-full bg-primary/10 px-2 py-1 text-[9px] font-extrabold text-primary">
             <MousePointer2 className="size-3" />
-            <MousePointer2 className="size-3" />
-            Arraste os jogadores
+            Arraste
           </span>
         )}
       </div>
@@ -330,15 +359,15 @@ function PitchHalf({
         className="relative overflow-hidden w-full"
         style={{
           aspectRatio: `${w} / ${h}`,
-          background: 'linear-gradient(180deg, #1a7a2e 0%, #0f4d1a 100%)',
-          borderRadius: 14,
+          background: 'repeating-linear-gradient(90deg, rgba(255,255,255,.025) 0, rgba(255,255,255,.025) 12.5%, transparent 12.5%, transparent 25%), linear-gradient(180deg, #167934 0%, #0b4a20 100%)',
+          borderRadius: 18,
           border: `3px solid ${teamColor}`,
-          boxShadow: `0 0 0 1px ${teamColor}30, 0 8px 32px rgba(0,0,0,0.25)`,
+          boxShadow: `0 0 0 1px ${teamColor}30, inset 0 0 60px rgba(0,0,0,.18), 0 14px 36px rgba(0,0,0,0.22)`,
         }}
       >
         <FieldLines w={w} h={h} flip={flip} format={format} />
 
-        {players.map(({ player, x, y }) => (
+        {players.map(({ player, x, y }, index) => (
           <DraggablePlayer
             key={player.id}
             player={player}
@@ -351,6 +380,7 @@ function PitchHalf({
             compact={compact}
             flip={flip}
             format={format}
+            index={index}
           />
         ))}
       </div>
@@ -387,20 +417,23 @@ export function DraggablePitch({
   onPositionsChange,
 }: DraggablePitchProps) {
   const [positions, setPositions] = useState<FieldPositions>({});
+  const cleanTeamA = useMemo(() => dedupePlayers(teamA), [teamA]);
+  const teamAIdentities = useMemo(() => new Set(cleanTeamA.map(playerIdentity)), [cleanTeamA]);
+  const cleanTeamB = useMemo(() => dedupePlayers(teamB, teamAIdentities), [teamB, teamAIdentities]);
 
   useEffect(() => {
     if (fieldPositions && Object.keys(fieldPositions).length > 0) {
       setPositions(fieldPositions);
     } else {
-      const defaultsA = getDefaultPositions(teamA, format);
-      const defaultsB = getDefaultPositions(teamB, format);
+      const defaultsA = getDefaultPositions(cleanTeamA, format);
+      const defaultsB = getDefaultPositions(cleanTeamB, format);
       const initial: FieldPositions = {};
       [...defaultsA, ...defaultsB].forEach(({ player, x, y }) => {
         initial[player.id] = { x, y };
       });
       setPositions(initial);
     }
-  }, [fieldPositions, teamA, teamB, format]);
+  }, [fieldPositions, cleanTeamA, cleanTeamB, format]);
 
   // Notify parent of position changes
   const handleDragEnd = useCallback(
@@ -413,26 +446,25 @@ export function DraggablePitch({
   );
 
   const placedA = useMemo(() => {
-    return teamA.map((player) => ({
+    return cleanTeamA.map((player) => ({
       player,
       x: positions[player.id]?.x ?? 50,
       y: positions[player.id]?.y ?? 50,
     }));
-  }, [teamA, positions]);
+  }, [cleanTeamA, positions]);
 
   const placedB = useMemo(() => {
-    return teamB.map((player) => ({
+    return cleanTeamB.map((player) => ({
       player,
       x: positions[player.id]?.x ?? 50,
       y: positions[player.id]?.y ?? 50,
     }));
-  }, [teamB, positions]);
+  }, [cleanTeamB, positions]);
 
   // Adjust field dimensions based on format
   const getDimensions = () => {
     if (compact) {
-      // Smaller dimensions for dialog preview to fit side-by-side
-      return format === 'F5' ? { w: 150, h: 220 } : format === 'F7' ? { w: 165, h: 240 } : { w: 175, h: 260 };
+      return format === 'F5' ? { w: 260, h: 330 } : format === 'F7' ? { w: 280, h: 370 } : { w: 300, h: 410 };
     }
     return format === 'F5' ? { w: 240, h: 320 } : format === 'F7' ? { w: 280, h: 400 } : { w: 320, h: 480 };
   };
@@ -440,7 +472,7 @@ export function DraggablePitch({
   const { w, h } = getDimensions();
 
   return (
-    <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
+    <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
       <PitchHalf
         teamName={teamAName}
         teamColor={teamAColor}

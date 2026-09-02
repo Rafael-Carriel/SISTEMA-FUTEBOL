@@ -6,7 +6,7 @@
 ![Stack](https://img.shields.io/badge/stack-React%2019%20%2B%20Firebase-07100b?style=flat)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
-**Projeto:** `fut-da-galera-irati` | **Stack:** React 19 + Vite + Firebase Firestore + Tailwind 4 + shadcn/ui | **Deploy:** Firebase Hosting
+**Projeto:** `na-trave-fut-2026` | **Stack:** React 19 + Vite + Firebase Firestore + Tailwind 4 + shadcn/ui | **Deploy:** Firebase Hosting
 
 ---
 
@@ -35,7 +35,7 @@ npm run build
 npm run lint
 ```
 
-Configure o Firebase em `lib/firebase.ts` (já apontado para `fut-da-galera-irati`).
+Configure o Firebase em `lib/firebase.ts` (já apontado para `na-trave-fut-2026`).
 
 ## 🗂️ Estrutura
 
@@ -75,4 +75,4 @@ git push -u origin feat/minha-feature
 
 ---
 
-Feito com 💚 para o **Fut das Quintas — Irati**
+Feito com 💚 para o **Fut das Quintas**

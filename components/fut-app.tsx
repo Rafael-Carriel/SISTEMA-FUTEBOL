@@ -12,7 +12,7 @@ import type { FieldPositions, Match, MatchEvent, MatchEventType, MatchFormat, Pa
 import { PitchView } from '@/components/pitch-view';
 import { DraggablePitch } from '@/components/draggable-pitch';
 import { LiveManager } from '@/components/live-manager';
-import { balancedTeamsSmart, getTeamBalanceInfo } from '@/lib/team-balancer';
+import { balancedTeamsSmart, getTeamBalanceInfo, uniqueLineupPlayers } from '@/lib/team-balancer';
 import { exportLineup } from '@/lib/lineup-export';
 
 /* ─── constants & helpers ─── */
@@ -47,6 +47,25 @@ const FORMAT_OPTIONS: { value: MatchFormat; label: string; players: number }[] =
 function initials(player?: Player) { return player ? (player.nickname || player.name).split(' ').slice(0, 2).map((part) => part[0]).join('').toUpperCase() : '?'; }
 function calcOverall(player: Player) { return Math.round((player.pace + player.shooting + player.passing + player.defending + player.physical) / 5); }
 function formatDate(value: string) { return new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: 'short' }).format(new Date(`${value}T12:00:00`)); }
+
+function dedupePlayerRecords(records: Player[]): Player[] {
+  const seenIds = new Set<string>();
+  const seenPeople = new Set<string>();
+  return records.filter((player) => {
+    const identity = `${(player.nickname || player.name).trim().toLocaleLowerCase('pt-BR')}|${player.number}`;
+    if (seenIds.has(player.id) || seenPeople.has(identity)) return false;
+    seenIds.add(player.id);
+    seenPeople.add(identity);
+    return true;
+  });
+}
+
+function normalizeMatchTeams(match: Match): Match {
+  const teamA = [...new Set(match.teamA)];
+  const used = new Set(teamA);
+  const teamB = [...new Set(match.teamB)].filter((id) => !used.has(id));
+  return { ...match, teamA, teamB };
+}
 
 function calculateStats(players: Player[], matches: Match[]): PlayerStats[] {
   return players.map((player) => {
@@ -102,6 +121,7 @@ export function FutApp() {
   const [showLiveManager, setShowLiveManager] = useState(false);
   const [exportFormat, setExportFormat] = useState<'png' | 'jpeg'>('png');
   const [editingMatchId, setEditingMatchId] = useState<string | null>(null);
+  const [isDrawingTeams, setIsDrawingTeams] = useState(false);
 
   /* ─── Firebase realtime ─── */
   useEffect(() => {
@@ -119,8 +139,8 @@ export function FutApp() {
         }
         if (cancelled) return;
         unsubscribers.push(
-          onSnapshot(collection(db, 'players'), (snap) => { setPlayers(snap.docs.map((item) => ({ ...item.data(), id: item.id }) as Player).sort((a, b) => a.nickname.localeCompare(b.nickname))); setConnection('online'); }),
-          onSnapshot(collection(db, 'matches'), (snap) => setMatches(snap.docs.map((item) => ({ ...item.data(), id: item.id }) as Match).sort((a, b) => `${b.date}${b.time}`.localeCompare(`${a.date}${a.time}`)))),
+          onSnapshot(collection(db, 'players'), (snap) => { setPlayers(dedupePlayerRecords(snap.docs.map((item) => ({ ...item.data(), id: item.id }) as Player)).sort((a, b) => a.nickname.localeCompare(b.nickname))); setConnection('online'); }),
+          onSnapshot(collection(db, 'matches'), (snap) => setMatches(snap.docs.map((item) => normalizeMatchTeams(({ ...item.data(), id: item.id }) as Match)).sort((a, b) => `${b.date}${b.time}`.localeCompare(`${a.date}${a.time}`)))),
           onSnapshot(collection(db, 'payments'), (snap) => setPayments(snap.docs.map((item) => ({ ...item.data(), id: item.id }) as Payment))),
         );
       } catch { if (!cancelled) setConnection('demo'); }
@@ -162,8 +182,15 @@ export function FutApp() {
 
   function previewDraft() {
     if (matchForm.selected.length < 2) { showNotice('Selecione pelo menos 2 jogadores.'); return; }
-    setPreviewTeams(balancedTeamsSmart(matchForm.selected, (id) => playerById(id)));
+    const uniqueIds = uniqueLineupPlayers(matchForm.selected, (id) => playerById(id)).map((player) => player.id);
+    setMatchForm((form) => ({ ...form, selected: uniqueIds }));
+    setIsDrawingTeams(true);
+    setPreviewTeams(null);
     setDragPositions({});
+    window.setTimeout(() => {
+      setPreviewTeams(balancedTeamsSmart(uniqueIds, (id) => playerById(id)));
+      setIsDrawingTeams(false);
+    }, 720);
   }
 
   /* ─── CRUD operations ─── */
@@ -213,7 +240,7 @@ export function FutApp() {
   }
 
   function openEditMatch(match: Match) {
-    const allPlayerIds = [...match.teamA, ...match.teamB];
+    const allPlayerIds = [...new Set([...match.teamA, ...match.teamB])];
     setMatchForm({
       title: match.title,
       venue: match.venue,
@@ -848,7 +875,7 @@ export function FutApp() {
   const artsView = () => <div className="grid gap-5 xl:grid-cols-[.78fr_1.22fr]"><section className="panel h-fit"><h3 className="text-lg font-black">Personalize a arte</h3><p className="mt-1 text-sm text-muted-foreground">Escolha o destaque e baixe em PNG.</p><label className="form-label mt-5">Tipo<select value={artType} onChange={(e) => setArtType(e.target.value as typeof artType)} className="form-control"><option value="artilheiro">Artilheiro do mês</option><option value="assistente">Maior assistente</option><option value="paredao">Paredão do mês</option><option value="craque">Craque do mês</option></select></label><label className="form-label mt-4">Jogador<select value={artPlayerId} onChange={(e) => { setArtPlayerId(e.target.value); setArtPhotoUrl(''); }} className="form-control">{players.map((player) => <option key={player.id} value={player.id}>{player.nickname}</option>)}</select></label>
     <div className="mt-4"><p className="form-label mb-2">Foto do dispositivo</p>{previewPhotoSrc ? <div className="flex items-center gap-3"><div className="size-14 overflow-hidden rounded-xl border-2 border-primary"><img src={previewPhotoSrc} alt="" className="h-full w-full object-cover" /></div><div className="flex-1"><p className="text-xs font-bold text-muted-foreground">Foto carregada</p><button onClick={() => setArtPhotoUrl('')} className="mt-1 text-xs font-bold text-red-500 hover:underline">Remover</button></div></div> : <label className="form-control flex items-center gap-2 cursor-pointer"><Camera className="size-4" />Escolher foto do dispositivo<input type="file" accept="image/*" className="hidden" onChange={(e) => handleArtPhoto(e.target.files?.[0])} /></label>}</div>
     <Button onClick={exportArt} className="mt-5 h-11 w-full"><ImageDown /> Baixar arte pronta</Button></section>
-    <div className="mx-auto w-full max-w-[620px]"><div className="art-preview"><div className="art-brand"><b>NA TRAVE</b><span>Setembro 2026</span></div><div className="art-avatar">{previewPhotoSrc ? <img src={previewPhotoSrc} alt="" /> : initials(artStats?.player)}</div><div className="art-copy"><p>{artLabel[0]}</p><h3>{artStats?.player.nickname.toUpperCase()}</h3><strong>{artLabel[1]}</strong></div><footer>Fut das quintas · Irati</footer></div></div></div>;
+    <div className="mx-auto w-full max-w-[620px]"><div className="art-preview"><div className="art-brand"><b>NA TRAVE</b><span>Setembro 2026</span></div><div className="art-avatar">{previewPhotoSrc ? <img src={previewPhotoSrc} alt="" /> : initials(artStats?.player)}</div><div className="art-copy"><p>{artLabel[0]}</p><h3>{artStats?.player.nickname.toUpperCase()}</h3><strong>{artLabel[1]}</strong></div><footer>Fut das quintas</footer></div></div></div>;
 
   /* ═══════════════════════════════════════════
      RENDER
@@ -931,7 +958,7 @@ export function FutApp() {
 
       {/* Match dialog (with balance preview + format selector + drag positions) */}
       <Dialog open={dialog === 'match'} onOpenChange={(open) => { if (!open) { setDialog(null); setPreviewTeams(null); setDragPositions({}); setEditingMatchId(null); } }}>
-        <DialogContent className="flex flex-col max-h-[90vh] sm:max-w-2xl gap-0 p-0 overflow-hidden">
+        <DialogContent className="flex max-h-[94vh] flex-col gap-0 overflow-hidden p-0 sm:max-w-5xl">
           <DialogHeader className="shrink-0 px-6 pt-6 pb-2"><DialogTitle>{editingMatchId ? 'Editar partida' : 'Nova partida'}</DialogTitle><DialogDescription>{editingMatchId ? 'Ajuste os detalhes e a escalação da partida.' : 'Selecione o formato e os confirmados; o sorteio inteligente equilibra por atributos.'}</DialogDescription></DialogHeader>
           <div className="flex-1 overflow-y-auto grid gap-4 sm:grid-cols-2 px-6 pb-6 pt-2">
             <label className="form-label sm:col-span-2">Nome<Input value={matchForm.title} onChange={(e) => setMatchForm({ ...matchForm, title: e.target.value })} className="form-control" /></label>
@@ -976,12 +1003,20 @@ export function FutApp() {
             {/* Balance preview with draggable pitch - DENTRO do scroll */}
             <div className="sm:col-span-2">
               {!previewTeams ? (
-                <Button variant="outline" onClick={previewDraft} className="w-full h-11 mt-2"><Swords /> Visualizar sorteio</Button>
+                <button type="button" disabled={isDrawingTeams} onClick={previewDraft} className={`draft-trigger ${isDrawingTeams ? 'drawing' : ''}`}>
+                  <span className="draft-trigger-icon"><Swords /></span>
+                  <span><b>{isDrawingTeams ? 'Sorteando os times…' : 'Sortear times agora'}</b><small>{isDrawingTeams ? 'Analisando posições e atributos' : 'Equilíbrio automático por posição e overall'}</small></span>
+                  <ChevronRight />
+                </button>
               ) : (
-                <div className="rounded-2xl border border-border bg-muted/50 p-3 sm:p-4">
-                  <div className="flex items-center justify-between mb-3">
-                    <p className="text-xs font-extrabold uppercase tracking-wider text-muted-foreground">Preview do sorteio</p>
-                    <button onClick={() => { setPreviewTeams(null); setDragPositions({}); }} className="text-xs font-bold text-muted-foreground hover:text-foreground"><X className="inline size-3" /> Limpar</button>
+                <div className="draft-result rounded-[24px] border border-border bg-gradient-to-b from-card to-muted/40 p-4 sm:p-5">
+                  <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                    <div><p className="text-[10px] font-black uppercase tracking-[.18em] text-primary">Escalação pronta</p><h3 className="mt-0.5 text-base font-black">Quadro tático</h3></div>
+                    <div className="flex items-center gap-2">
+                      {previewBalance && <span className="balance-chip"><Check /> {previewBalance.percentage}% equilibrado</span>}
+                      <button onClick={previewDraft} className="rounded-xl border border-border bg-background px-3 py-2 text-xs font-extrabold transition hover:border-primary hover:text-primary"><Sparkles className="mr-1 inline size-3.5" /> Sortear novamente</button>
+                      <button onClick={() => { setPreviewTeams(null); setDragPositions({}); }} className="grid size-8 place-items-center rounded-xl text-muted-foreground hover:bg-muted hover:text-foreground" aria-label="Limpar sorteio"><X className="size-4" /></button>
+                    </div>
                   </div>
                   <DraggablePitch
                     teamA={previewTeamAPlayers}
@@ -994,17 +1029,7 @@ export function FutApp() {
                     fieldPositions={dragPositions}
                     onPositionsChange={setDragPositions}
                   />
-                  {previewBalance && (
-                    <div className="mt-3 text-center">
-                      <div className="mx-auto mb-1 h-2 w-full max-w-[200px] overflow-hidden rounded-full bg-border">
-                        <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${previewBalance.percentage}%` }} />
-                      </div>
-                      <p className={`text-xs font-extrabold ${previewBalance.color}`}>{previewBalance.percentage}% — {previewBalance.label}</p>
-                    </div>
-                  )}
-                  <p className="mt-2 text-center text-[10px] font-bold text-muted-foreground">
-                    Arraste os jogadores para ajustar a posição
-                  </p>
+                  <div className="mt-4 flex items-center justify-center gap-2 rounded-xl bg-muted/70 px-3 py-2 text-[10px] font-bold text-muted-foreground"><Menu className="size-3" /> Segure e arraste um jogador para ajustar a posição</div>
                 </div>
               )}
             </div>

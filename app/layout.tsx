@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  metadataBase: new URL('https://fut-da-galera-irati.web.app'),
+  metadataBase: new URL('https://na-trave-fut-2026.web.app'),
   title: 'Na Trave · O placar do seu fut',
   description:
     'Partidas, estatísticas, rankings e mensalidades do futebol da galera.',

@@ -8,8 +8,32 @@ function teamPower(players: Player[]): number {
   return players.reduce((sum, p) => sum + overall(p) + 0.3 * p.pace + 0.2 * p.defending + 0.15 * p.shooting, 0);
 }
 
+function playerIdentity(player: Player): string {
+  const name = (player.nickname || player.name).trim().toLocaleLowerCase('pt-BR');
+  return `${name}|${player.number}`;
+}
+
+/** Garante que o mesmo jogador nunca entre duas vezes no sorteio. */
+export function uniqueLineupPlayers(
+  ids: string[],
+  playerById: (id: string) => Player | undefined,
+): Player[] {
+  const seenIds = new Set<string>();
+  const seenPeople = new Set<string>();
+
+  return ids.flatMap((id) => {
+    const player = playerById(id);
+    if (!player) return [];
+    const identity = playerIdentity(player);
+    if (seenIds.has(player.id) || seenPeople.has(identity)) return [];
+    seenIds.add(player.id);
+    seenPeople.add(identity);
+    return [player];
+  });
+}
+
 export function balancedTeamsSmart(ids: string[], playerById: (id: string) => Player | undefined): { teamA: string[]; teamB: string[] } {
-  const players = ids.map((id) => playerById(id)).filter(Boolean) as Player[];
+  const players = uniqueLineupPlayers(ids, playerById);
   if (players.length < 2) {
     const half = Math.ceil(players.length / 2);
     return { teamA: players.slice(0, half).map((p) => p.id), teamB: players.slice(half).map((p) => p.id) };
