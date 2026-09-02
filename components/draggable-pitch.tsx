@@ -391,14 +391,14 @@ export function DraggablePitch({
 }: DraggablePitchProps) {
   const [positions, setPositions] = useState<FieldPositions>({});
 
-  // Initialize positions from fieldPositions prop or generate defaults
   useEffect(() => {
     if (fieldPositions && Object.keys(fieldPositions).length > 0) {
       setPositions(fieldPositions);
     } else {
-      const defaults = getDefaultPositions([...teamA, ...teamB], format);
+      const defaultsA = getDefaultPositions(teamA, format);
+      const defaultsB = getDefaultPositions(teamB, format);
       const initial: FieldPositions = {};
-      defaults.forEach(({ player, x, y }) => {
+      [...defaultsA, ...defaultsB].forEach(({ player, x, y }) => {
         initial[player.id] = { x, y };
       });
       setPositions(initial);
