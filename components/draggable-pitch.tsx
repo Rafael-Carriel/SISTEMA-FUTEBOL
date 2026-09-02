@@ -6,12 +6,10 @@ import type { Player, Position, MatchFormat, FieldPositions } from '@/lib/fut-ty
 
 /* ─── helpers ─── */
 function initials(player: Player): string {
-  return (player.nickname || player.name)
-    .split(' ')
-    .slice(0, 2)
-    .map((w) => w[0])
-    .join('')
-    .toUpperCase();
+  const base = (player.nickname || player.name).trim();
+  const parts = base.split(' ').filter(Boolean);
+  if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
+  return base.slice(0, 2).toUpperCase();
 }
 
 /* ─── default position coordinates by format ─── */
