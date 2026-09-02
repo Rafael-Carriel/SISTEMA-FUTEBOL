@@ -50,10 +50,11 @@ export type Match = {
   scoreB: number;
   events: MatchEvent[];
   createdAt: string;
-  // New fields for v0.3
   format?: MatchFormat;
   fieldPositions?: FieldPositions;
   startedAt?: string;
+  goalkeeperAId?: string;
+  goalkeeperBId?: string;
 };
 
 export type Payment = {

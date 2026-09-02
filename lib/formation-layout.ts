@@ -83,12 +83,19 @@ function slotsForCount(format: MatchFormat, count: number): FormationSlot[] {
 }
 
 /** Encaixa os jogadores no desenho tático, mesmo quando as posições cadastradas não fecham o esquema. */
-export function assignFormationPositions(players: Player[], format: MatchFormat): FormationPlayer[] {
+export function assignFormationPositions(players: Player[], format: MatchFormat, goalkeeperId?: string): FormationPlayer[] {
   const remaining = [...players];
   const slots = slotsForCount(format, players.length);
 
   return slots.flatMap((slot) => {
     if (!remaining.length) return [];
+    if (slot.position === 'GOL' && goalkeeperId) {
+      const goalkeeperIndex = remaining.findIndex((player) => player.id === goalkeeperId);
+      if (goalkeeperIndex >= 0) {
+        const [goalkeeper] = remaining.splice(goalkeeperIndex, 1);
+        return [{ player: goalkeeper, x: slot.x, y: slot.y }];
+      }
+    }
     remaining.sort((a, b) => {
       const roleScore = roleDistance(a.position, slot.position) - roleDistance(b.position, slot.position);
       return roleScore || overall(b) - overall(a);

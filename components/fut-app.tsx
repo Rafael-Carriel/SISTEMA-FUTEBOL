@@ -1,8 +1,8 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { arrayUnion, collection, deleteDoc, doc, getDocs, increment, onSnapshot, setDoc, updateDoc, writeBatch } from 'firebase/firestore';
-import { Activity, BadgeDollarSign, CalendarDays, Camera, Check, ChevronRight, CircleDollarSign, Download, Goal, ImageDown, LayoutDashboard, Medal, Menu, Plus, Save, Shield, ShieldCheck, Shirt, Sparkles, Swords, Target, Trophy, UserPlus, Users, WalletCards, X } from 'lucide-react';
+import { arrayUnion, collection, deleteDoc, deleteField, doc, getDocs, increment, onSnapshot, setDoc, updateDoc, writeBatch } from 'firebase/firestore';
+import { Activity, BadgeDollarSign, CalendarDays, Camera, Check, ChevronRight, CircleDollarSign, Download, Frown, Goal, ImageDown, LayoutDashboard, Medal, Menu, Monitor, Moon, Pencil, Plus, RectangleVertical, Repeat, Save, Shield, ShieldCheck, Shirt, Sparkles, Sun, Swords, Target, Trash2, Trophy, UserPlus, Users, WalletCards, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
@@ -96,6 +96,17 @@ function PlayerAvatar({ player, size = 'md' }: { player?: Player; size?: 'sm' | 
 function StatPill({ value, label }: { value: number; label: string }) { return <div className="rounded-2xl bg-muted p-3"><p className="text-xl font-black tabular-nums">{value}</p><p className="stat-label">{label}</p></div>; }
 function Metric({ icon: Icon, label, value }: { icon: typeof Users; label: string; value: string }) { return <div className="metric-card"><Icon /><div><p>{label}</p><strong>{value}</strong></div></div>; }
 
+/** Colored lucide icon for a match event, keeping the timeline consistent with the rest of the UI. */
+function EventIcon({ event }: { event: MatchEvent }) {
+  if (event.type === 'goal') return event.isOwnGoal
+    ? <Frown className="size-3.5 text-orange-500" />
+    : <Goal className="size-3.5 text-emerald-500" />;
+  if (event.type === 'save') return <ShieldCheck className="size-3.5 text-sky-500" />;
+  if (event.type === 'yellow') return <RectangleVertical className="size-3.5 fill-yellow-400 text-yellow-500" />;
+  if (event.type === 'red') return <RectangleVertical className="size-3.5 fill-red-500 text-red-600" />;
+  return <Repeat className="size-3.5 text-muted-foreground" />;
+}
+
 /* ═══════════════════════════════════════════
    MAIN APP
    ═══════════════════════════════════════════ */
@@ -122,6 +133,34 @@ export function FutApp() {
   const [exportFormat, setExportFormat] = useState<'png' | 'jpeg'>('png');
   const [editingMatchId, setEditingMatchId] = useState<string | null>(null);
   const [isDrawingTeams, setIsDrawingTeams] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [paymentMonth, setPaymentMonth] = useState(monthKey);
+  const [monthlyValue, setMonthlyValue] = useState(40);
+  const [showAvulsoForm, setShowAvulsoForm] = useState(false);
+  const [avulsoName, setAvulsoName] = useState('');
+
+  /* ─── theme (light / dark / system) ─── */
+  const [themeMode, setThemeMode] = useState<'light' | 'dark' | 'system'>('system');
+  const getDark = () => themeMode === 'dark' || (themeMode === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+  useEffect(() => {
+    const stored = localStorage.getItem('natrave-theme');
+    if (stored === 'light' || stored === 'dark' || stored === 'system') setThemeMode(stored);
+  }, []);
+  useEffect(() => {
+    document.documentElement.classList.toggle('dark', getDark());
+    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', getDark() ? '#0b1710' : '#f5f8f4');
+    const media = window.matchMedia('(prefers-color-scheme: dark)');
+    const onSystemChange = () => { if (themeMode === 'system') document.documentElement.classList.toggle('dark', media.matches); };
+    media.addEventListener('change', onSystemChange);
+    return () => media.removeEventListener('change', onSystemChange);
+  }, [themeMode]);
+  const cycleTheme = () => {
+    const order = ['light', 'dark', 'system'] as const;
+    const next = order[(order.indexOf(themeMode) + 1) % order.length];
+    setThemeMode(next);
+    localStorage.setItem('natrave-theme', next);
+  };
+  const ThemeIcon = themeMode === 'dark' ? Moon : themeMode === 'light' ? Sun : Monitor;
 
   /* ─── Firebase realtime ─── */
   useEffect(() => {
@@ -160,6 +199,23 @@ export function FutApp() {
   const leaderboard = [...stats].sort((a, b) => b.goals - a.goals || b.assists - a.assists);
   const playerById = (id?: string) => players.find((player) => player.id === id);
   const showNotice = (message: string) => setNotice(message);
+
+  const monthOptions = useMemo(() => {
+    const opts: { value: string; label: string }[] = [];
+    const now = new Date();
+    for (let i = 0; i < 12; i++) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      const label = d.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+      opts.push({ value: key, label: label.charAt(0).toUpperCase() + label.slice(1) });
+    }
+    return opts;
+  }, []);
+
+  const filteredPayments = useMemo(() => payments.filter((p) => p.month === paymentMonth), [payments, paymentMonth]);
+  const filteredPaidCount = filteredPayments.filter((p) => p.paid).length;
+  const filteredRevenue = filteredPayments.filter((p) => p.paid).reduce((sum, p) => sum + p.amount, 0);
+  const currentMonthLabel = monthOptions.find((o) => o.value === paymentMonth)?.label || paymentMonth;
 
   const selectedFormat = FORMAT_OPTIONS.find((f) => f.value === matchForm.format) || FORMAT_OPTIONS[1];
   const idealPerTeam = selectedFormat.players;
@@ -271,6 +327,69 @@ export function FutApp() {
     showNotice('Partida excluída.');
   }
 
+  async function togglePayment(player: Player) {
+    const id = `${paymentMonth}_${player.id}`;
+    const current = payments.find((item) => item.id === id);
+    const paid = !current?.paid;
+    const next: Payment = { id, playerId: player.id, month: paymentMonth, amount: current?.amount ?? monthlyValue, paid, paidAt: paid ? new Date().toISOString() : undefined };
+    setPayments((all) => (all.some((item) => item.id === id) ? all.map((item) => (item.id === id ? next : item)) : [...all, next]));
+    try { await setDoc(doc(db, 'payments', id), next); } catch { /* offline: local state already updated */ }
+    showNotice(paid ? `${player.nickname} está em dia.` : `${player.nickname} voltou para pendente.`);
+  }
+
+  async function updatePaymentAmount(player: Player, amount: number) {
+    const id = `${paymentMonth}_${player.id}`;
+    const current = payments.find((item) => item.id === id);
+    const next: Payment = { id, playerId: player.id, month: paymentMonth, amount, paid: current?.paid ?? false, paidAt: current?.paidAt };
+    setPayments((all) => (all.some((item) => item.id === id) ? all.map((item) => (item.id === id ? next : item)) : [...all, next]));
+    try { await setDoc(doc(db, 'payments', id), next); } catch { /* offline */ }
+  }
+
+  async function addAvulso() {
+    if (!avulsoName.trim()) return showNotice('Digite o nome do avulso.');
+    const id = `avulso_${paymentMonth}_${crypto.randomUUID().slice(0, 8)}`;
+    const avulsoPlayer: Player = {
+      id, name: avulsoName.trim(), nickname: avulsoName.trim(), number: 0,
+      position: 'ATA', pace: 0, shooting: 0, passing: 0, defending: 0, physical: 0,
+      createdAt: new Date().toISOString(),
+    };
+    const payment: Payment = { id: `${paymentMonth}_${id}`, playerId: id, month: paymentMonth, amount: monthlyValue, paid: false };
+    try {
+      await setDoc(doc(db, 'players', id), avulsoPlayer);
+      await setDoc(doc(db, 'payments', payment.id), payment);
+    } catch { /* offline */ }
+    setPlayers((all) => [...all, avulsoPlayer]);
+    setPayments((all) => [...all, payment]);
+    setAvulsoName('');
+    setShowAvulsoForm(false);
+    showNotice(`${avulsoName.trim()} adicionado como avulso.`);
+  }
+
+  async function removeAvulso(playerId: string) {
+    if (!window.confirm('Remover este avulso?')) return;
+    try { await deleteDoc(doc(db, 'players', playerId)); } catch { /* offline */ }
+    setPlayers((all) => all.filter((p) => p.id !== playerId));
+    setPayments((all) => all.filter((p) => p.playerId !== playerId));
+    showNotice('Avulso removido.');
+  }
+
+  async function setGoalkeeper(matchId: string, team: 'A' | 'B', playerId: string) {
+    const key = team === 'A' ? 'goalkeeperAId' : 'goalkeeperBId';
+    const current = matches.find((match) => match.id === matchId)?.[key];
+    const next = current === playerId ? undefined : playerId;
+    setMatches((all) => all.map((match) => match.id === matchId ? { ...match, [key]: next } : match));
+    try {
+      await updateDoc(doc(db, 'matches', matchId), { [key]: next ?? deleteField() });
+    } catch { /* offline: optimistic state stays available */ }
+    showNotice(next ? `${playerById(playerId)?.nickname || 'Jogador'} agora está no gol.` : 'Goleiro removido da escalação.');
+  }
+
+  async function updateRating(player: Player, field: 'pace' | 'shooting' | 'passing' | 'defending' | 'physical', value: number) {
+    const rating = Math.max(1, Math.min(99, value));
+    setPlayers((all) => all.map((item) => (item.id === player.id ? { ...item, [field]: rating } : item)));
+    try { await updateDoc(doc(db, 'players', player.id), { [field]: rating }); } catch { /* offline: local state already updated */ }
+  }
+
   async function changeMatchStatus(match: Match, status: Match['status']) {
     const update: Partial<Match> = { status };
     if (status === 'live') update.startedAt = new Date().toISOString();
@@ -280,7 +399,7 @@ export function FutApp() {
 
   function openEvent(match: Match, type: MatchEventType) {
     setActiveMatchId(match.id);
-    setEventForm({ type, team: 'A', playerId: match.teamA[0] || '', assistPlayerId: '', minute: String((match.events?.length || 0) + 1) });
+    setEventForm({ type, team: 'A', playerId: (type === 'save' ? match.goalkeeperAId : undefined) || match.teamA[0] || '', assistPlayerId: '', minute: String((match.events?.length || 0) + 1) });
     setDialog('event');
   }
 
@@ -467,16 +586,18 @@ export function FutApp() {
   const dashboard = () => {
     const match = liveMatch || matches[0];
     const topScorers = [...stats].sort((a, b) => b.goals - a.goals).slice(0, 3);
+    const totalGoals = stats.reduce((sum, item) => sum + item.goals, 0);
+    const finishedMatches = matches.filter((item) => item.status === 'finished').length;
     return (
       <div className="space-y-5">
         {/* Hero Live Match Card */}
         {match && (
           <section
-            className="relative overflow-hidden rounded-[28px] border border-white/10 p-6 sm:p-8"
+            className="relative overflow-hidden rounded-[28px] border border-line-inverse p-6 text-ink-inverse sm:p-8"
             style={{
               background: match.status === 'live'
-                ? 'linear-gradient(135deg, #0b1710 0%, #14271a 50%, #1a3d26 100%)'
-                : 'linear-gradient(135deg, #0b1710 0%, #14271a 100%)',
+                ? 'linear-gradient(135deg, var(--surface-inverse) 0%, var(--surface-inverse-2) 50%, var(--surface-inverse-3) 100%)'
+                : 'linear-gradient(135deg, var(--surface-inverse) 0%, var(--surface-inverse-2) 100%)',
             }}
           >
             {match.status === 'live' && (
@@ -491,7 +612,7 @@ export function FutApp() {
                       AO VIVO
                     </span>
                   ) : (
-                    <span className="rounded-full bg-white/10 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-white/50">
+                    <span className="rounded-full bg-white/10 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-ink-inverse-soft">
                       {match.status === 'finished' ? 'Encerrado' : 'Próximo jogo'}
                     </span>
                   )}
@@ -503,38 +624,68 @@ export function FutApp() {
                 </div>
                 <button
                   onClick={() => { setActiveMatchId(match.id); setView('matches'); }}
-                  className="rounded-xl bg-white/10 px-3 py-1.5 text-xs font-semibold text-white/60 transition hover:bg-white/15 hover:text-white"
+                  className="flex items-center gap-1 rounded-xl bg-white/10 px-3 py-1.5 text-xs font-semibold text-ink-inverse-soft transition hover:bg-white/15 hover:text-ink-inverse"
                 >
-                  Abrir súmula →
+                  Abrir súmula <ChevronRight className="size-3.5" />
                 </button>
               </div>
 
               {/* Giant Score */}
-              <div className="my-6 grid grid-cols-[1fr_auto_1fr] items-center gap-4 text-center">
-                <div className="text-right">
-                  <p className="text-xs font-black uppercase tracking-wider text-white/40">{match.teamAName}</p>
-                </div>
-                <div className="flex items-center gap-3 text-7xl font-black tabular-nums tracking-tighter text-white antialiased sm:text-8xl">
-                  <span>{match.scoreA}</span>
-                  <span className="text-white/15">—</span>
-                  <span>{match.scoreB}</span>
-                </div>
-                <div className="text-left">
-                  <p className="text-xs font-black uppercase tracking-wider text-white/40">{match.teamBName}</p>
-                </div>
-              </div>
+              <div className="my-4 rounded-2xl border border-line-inverse bg-white/[.03] p-4 sm:p-5">
+                <div className="grid grid-cols-3 items-start gap-3">
+                  <div className="text-center">
+                    <p className="mb-2 text-xs font-black uppercase tracking-wider text-ink-inverse-soft">{match.teamAName}</p>
+                    <div className="space-y-0.5">
+                      {match.teamA.map((id) => {
+                        const p = players.find((pl) => pl.id === id);
+                        if (!p) return null;
+                        const isGK = p.id === match.goalkeeperAId;
+                        return (
+                          <button key={p.id} onClick={() => setGoalkeeper(match.id, 'A', p.id)} className={`block w-full truncate text-xs transition hover:underline ${isGK ? 'font-black text-emerald-400' : 'text-ink-inverse-faint'}`} title={isGK ? 'Goleiro (clique para remover)' : 'Clique para apontar goleiro'}>
+                            {p.nickname}{isGK ? ' (GOL)' : ''}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
 
-              {/* Info row */}
-              <div className="flex items-center justify-between text-xs text-white/40">
-                <span>{formatDate(match.date)} · {match.time}</span>
-                <span>{match.venue}</span>
-                {match.status === 'live' && (
-                  <span className="font-mono text-primary">{match.events?.length || 0} lances</span>
-                )}
+                  <div className="flex flex-col items-center gap-1 pt-6">
+                    <div className="flex items-baseline gap-2 text-5xl font-black tabular-nums tracking-tighter sm:text-6xl">
+                      <span>{match.scoreA}</span>
+                      <span className="text-lg text-ink-inverse-faint/40">—</span>
+                      <span>{match.scoreB}</span>
+                    </div>
+                    <span className="text-[10px] text-ink-inverse-faint">{formatDate(match.date)} · {match.time}</span>
+                  </div>
+
+                  <div className="text-center">
+                    <p className="mb-2 text-xs font-black uppercase tracking-wider text-ink-inverse-soft">{match.teamBName}</p>
+                    <div className="space-y-0.5">
+                      {match.teamB.map((id) => {
+                        const p = players.find((pl) => pl.id === id);
+                        if (!p) return null;
+                        const isGK = p.id === match.goalkeeperBId;
+                        return (
+                          <button key={p.id} onClick={() => setGoalkeeper(match.id, 'B', p.id)} className={`block w-full truncate text-xs transition hover:underline ${isGK ? 'font-black text-emerald-400' : 'text-ink-inverse-faint'}`} title={isGK ? 'Goleiro (clique para remover)' : 'Clique para apontar goleiro'}>
+                            {isGK ? '(GOL) ' : ''}{p.nickname}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           </section>
         )}
+
+        {/* Quick metrics */}
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <Metric icon={Users} label="Jogadores no elenco" value={String(players.length)} />
+          <Metric icon={Goal} label="Gols na temporada" value={String(totalGoals)} />
+          <Metric icon={CalendarDays} label="Partidas encerradas" value={String(finishedMatches)} />
+          <Metric icon={BadgeDollarSign} label="Caixa do mês" value={money.format(monthlyRevenue)} />
+        </div>
 
         {/* Bento Grid */}
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -552,11 +703,16 @@ export function FutApp() {
                 <button
                   key={item.player.id}
                   onClick={() => { setActivePlayerId(item.player.id); setDialog('playerCard'); }}
-                  className="flex flex-1 flex-col items-center gap-2 rounded-2xl bg-muted/50 p-3 transition hover:bg-muted"
+                  className="flex flex-1 flex-col items-center gap-2 rounded-2xl border border-transparent bg-muted/50 p-3 transition hover:border-primary/40 hover:bg-muted"
                 >
-                  <span className="text-lg">{index === 0 ? '🥇' : index === 1 ? '🥈' : '🥉'}</span>
+                  <span
+                    className="grid size-6 place-items-center rounded-full text-[10px] font-black text-surface-inverse"
+                    style={{ background: index === 0 ? '#f4c542' : index === 1 ? '#c7ced6' : '#d09359' }}
+                  >
+                    {index + 1}
+                  </span>
                   <PlayerAvatar player={item.player} size="md" />
-                  <p className="truncate text-xs font-black">{item.player.nickname}</p>
+                  <p className="w-full truncate text-center text-xs font-black">{item.player.nickname}</p>
                   <p className="text-xl font-black tabular-nums text-primary">{item.goals}</p>
                   <p className="stat-label">gols</p>
                 </button>
@@ -653,12 +809,12 @@ export function FutApp() {
             {/* Edit button - always visible except maybe live */}
             {match.status !== 'live' && (
               <Button variant="outline" size="sm" onClick={() => openEditMatch(match)}>
-                <span className="size-4">✏️</span> Editar
+                <Pencil className="size-4" /> Editar
               </Button>
             )}
             {/* Delete button - with extra confirmation for live matches */}
-            <Button variant="outline" size="sm" onClick={() => deleteMatch(match)} className="text-red-500 hover:bg-red-500/10 hover:text-red-500 border-red-500/30">
-              <span className="size-4">🗑️</span> Excluir
+            <Button variant="outline" size="sm" onClick={() => deleteMatch(match)} className="border-red-500/30 text-red-500 hover:bg-red-500/10 hover:text-red-500">
+              <Trash2 className="size-4" /> Excluir
             </Button>
             {match.status === 'scheduled' && (
               <Button onClick={() => changeMatchStatus(match, 'live')}><Swords /> Iniciar</Button>
@@ -699,6 +855,7 @@ export function FutApp() {
               onAddEvent={handleLiveAddEvent}
               onRemoveEvent={handleLiveRemoveEvent}
               onFinish={handleLiveFinish}
+              onSetGoalkeeper={(team, playerId) => setGoalkeeper(match.id, team, playerId)}
             />
           </div>
         )}
@@ -706,21 +863,45 @@ export function FutApp() {
         {/* Score (when not in live manager mode) */}
         {!showLive && (
           <>
-            <div className="match-score">
-              <TeamSummary name={match.teamAName} ids={match.teamA} players={players} align="right" />
-              <strong>{match.scoreA}<i>—</i>{match.scoreB}</strong>
-              <TeamSummary name={match.teamBName} ids={match.teamB} players={players} align="left" />
+            <div className="match-scoreboard" aria-label={`${match.teamAName} ${match.scoreA}, ${match.teamBName} ${match.scoreB}`}>
+              <p>{match.teamAName}</p>
+              <div>
+                <strong>{match.scoreA}</strong>
+                <span>—</span>
+                <strong>{match.scoreB}</strong>
+              </div>
+              <p>{match.teamBName}</p>
+              <small>{formatDate(match.date)} · {match.time}</small>
             </div>
-            {/* Pitch visualization */}
+
+            {/* Rosters flank the formations on wide screens. */}
             {teamAPlayers.length > 0 && teamBPlayers.length > 0 && (
-              <div className="mt-4">
-                <PitchView
-                  teamA={teamAPlayers}
-                  teamB={teamBPlayers}
-                  teamAName={match.teamAName}
-                  teamBName={match.teamBName}
-                  compact={match.status !== 'finished'}
-                  format={match.format || 'F7'}
+              <div className="match-lineup-layout">
+                <MatchRoster
+                  name={match.teamAName}
+                  players={teamAPlayers}
+                  goalkeeperId={match.goalkeeperAId}
+                  team="A"
+                  onSetGoalkeeper={(playerId) => setGoalkeeper(match.id, 'A', playerId)}
+                />
+                <div className="match-pitches">
+                  <PitchView
+                    teamA={teamAPlayers}
+                    teamB={teamBPlayers}
+                    teamAName={match.teamAName}
+                    teamBName={match.teamBName}
+                    compact={match.status !== 'finished'}
+                    format={match.format || 'F7'}
+                    goalkeeperAId={match.goalkeeperAId}
+                    goalkeeperBId={match.goalkeeperBId}
+                  />
+                </div>
+                <MatchRoster
+                  name={match.teamBName}
+                  players={teamBPlayers}
+                  goalkeeperId={match.goalkeeperBId}
+                  team="B"
+                  onSetGoalkeeper={(playerId) => setGoalkeeper(match.id, 'B', playerId)}
                 />
               </div>
             )}
@@ -740,7 +921,7 @@ export function FutApp() {
             <div className="grid gap-2 sm:grid-cols-2">
               {[...match.events].reverse().slice(0, 6).map((event) => (
                 <div key={event.id} className="event-row">
-                  <span>{event.type === 'goal' ? (event.isOwnGoal ? '🤦' : '⚽') : event.type === 'save' ? '🧤' : event.type === 'yellow' ? '🟨' : event.type === 'red' ? '🟥' : '🔄'}</span>
+                  <span><EventIcon event={event} /></span>
                   <b>{playerById(event.playerId)?.nickname}{event.assistPlayerId ? ` · assistência ${playerById(event.assistPlayerId)?.nickname}` : ''}</b>
                   <small>{event.minute}&apos;</small>
                 </div>
@@ -788,14 +969,14 @@ export function FutApp() {
         {/* Podium Top 3 */}
         {top3.length >= 3 && (
           <div className="panel overflow-hidden p-0">
-            <div className="bg-gradient-to-br from-[#0b1710] to-[#14271a] p-6">
+            <div className="bg-[linear-gradient(135deg,var(--surface-inverse)_0%,var(--surface-inverse-2)_100%)] p-6">
               <div className="flex items-end justify-center gap-4">
                 {/* 2nd place */}
-                <PodiumCard stat={top3[1]} rank={2} medal="🥈" height="h-28" onClick={(id) => { setActivePlayerId(id); setDialog('playerCard'); }} />
+                <PodiumCard stat={top3[1]} rank={2} value={top3[1][rankingTab]} suffix={activeSection.suffix} height="h-28" onClick={(id) => { setActivePlayerId(id); setDialog('playerCard'); }} />
                 {/* 1st place */}
-                <PodiumCard stat={top3[0]} rank={1} medal="🥇" height="h-36" onClick={(id) => { setActivePlayerId(id); setDialog('playerCard'); }} />
+                <PodiumCard stat={top3[0]} rank={1} value={top3[0][rankingTab]} suffix={activeSection.suffix} height="h-36" onClick={(id) => { setActivePlayerId(id); setDialog('playerCard'); }} />
                 {/* 3rd place */}
-                <PodiumCard stat={top3[2]} rank={3} medal="🥉" height="h-24" onClick={(id) => { setActivePlayerId(id); setDialog('playerCard'); }} />
+                <PodiumCard stat={top3[2]} rank={3} value={top3[2][rankingTab]} suffix={activeSection.suffix} height="h-24" onClick={(id) => { setActivePlayerId(id); setDialog('playerCard'); }} />
               </div>
             </div>
             <div className="p-4">
@@ -865,7 +1046,140 @@ export function FutApp() {
   };
 
   /* ─── PAYMENTS VIEW ─── */
-  const paymentsView = () => <div className="space-y-5"><div className="grid gap-4 sm:grid-cols-3"><Metric icon={BadgeDollarSign} label="Recebido" value={money.format(monthlyRevenue)} /><Metric icon={WalletCards} label="Previsto" value={money.format(players.length * 40)} /><Metric icon={Users} label="Em dia" value={`${paidPayments.length}/${players.length}`} /></div><section className="panel overflow-hidden p-0"><div className="flex items-center justify-between border-b p-5"><div><p className="eyebrow-muted">Setembro 2026</p><h3 className="mt-1 text-lg font-black">Controle de pagamentos</h3></div><span className="rounded-full bg-muted px-3 py-1.5 text-xs font-bold">R$ 40 / jogador</span></div><div className="divide-y">{players.map((player) => { const payment = payments.find((item) => item.id === `${monthKey}_${player.id}`); return <div key={player.id} className="flex items-center gap-3 px-5 py-3"><PlayerAvatar player={player} /><div className="min-w-0 flex-1"><b>{player.nickname}</b><p className="text-xs text-muted-foreground">{payment?.paid ? 'Pagamento confirmado' : 'Pagamento pendente'}</p></div><button onClick={() => togglePayment(player)} className={`payment ${payment?.paid ? 'paid' : 'pending'}`}>{payment?.paid ? <Check /> : <X />}{payment?.paid ? 'Em dia' : 'Pendente'}</button></div>; })}</div></section></div>;
+  const paymentsView = () => {
+    const allPlayersForMonth = [...players];
+    const avulsos = allPlayersForMonth.filter((p) => p.id.startsWith('avulso_'));
+    const regularPlayers = allPlayersForMonth.filter((p) => !p.id.startsWith('avulso_'));
+
+    return (
+      <div className="space-y-5">
+        <div className="grid gap-4 sm:grid-cols-3">
+          <Metric icon={BadgeDollarSign} label="Recebido" value={money.format(filteredRevenue)} />
+          <Metric icon={WalletCards} label="Previsto" value={money.format(allPlayersForMonth.length * monthlyValue)} />
+          <Metric icon={Users} label="Em dia" value={`${filteredPaidCount}/${allPlayersForMonth.length}`} />
+        </div>
+
+        <section className="panel overflow-hidden p-0">
+          <div className="flex flex-col gap-4 border-b p-5 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="eyebrow-muted">{currentMonthLabel}</p>
+              <h3 className="mt-1 text-lg font-black">Controle de pagamentos</h3>
+            </div>
+            <div className="flex items-center gap-3">
+              <select
+                value={paymentMonth}
+                onChange={(e) => setPaymentMonth(e.target.value)}
+                className="form-control h-9 w-44 text-xs"
+              >
+                {monthOptions.map((opt) => (
+                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                ))}
+              </select>
+              <div className="flex items-center gap-1.5 rounded-lg border bg-muted/50 px-2.5 py-1.5">
+                <span className="text-xs text-muted-foreground">R$</span>
+                <input
+                  type="number"
+                  value={monthlyValue}
+                  onChange={(e) => setMonthlyValue(Number(e.target.value) || 0)}
+                  className="w-14 bg-transparent text-xs font-bold outline-none"
+                  min={0}
+                />
+                <span className="text-xs text-muted-foreground">/jogador</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="divide-y">
+            {regularPlayers.map((player) => {
+              const payment = filteredPayments.find((item) => item.playerId === player.id);
+              return (
+                <div key={player.id} className="flex items-center gap-3 px-5 py-3">
+                  <PlayerAvatar player={player} />
+                  <div className="min-w-0 flex-1">
+                    <b>{player.nickname}</b>
+                    <p className="text-xs text-muted-foreground">{payment?.paid ? 'Pagamento confirmado' : 'Pagamento pendente'}</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1 rounded-md border bg-muted/30 px-2 py-1">
+                      <span className="text-[10px] text-muted-foreground">R$</span>
+                      <input
+                        type="number"
+                        value={payment?.amount ?? monthlyValue}
+                        onChange={(e) => updatePaymentAmount(player, Number(e.target.value) || 0)}
+                        className="w-10 bg-transparent text-xs font-bold outline-none"
+                        min={0}
+                      />
+                    </div>
+                    <button onClick={() => togglePayment(player)} className={`payment ${payment?.paid ? 'paid' : 'pending'}`}>
+                      {payment?.paid ? <Check /> : <X />}{payment?.paid ? 'Em dia' : 'Pendente'}
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+
+            {avulsos.length > 0 && (
+              <div className="border-t-2 border-dashed">
+                <p className="px-5 pt-3 text-[10px] font-extrabold uppercase tracking-wider text-muted-foreground">Avulsos</p>
+                {avulsos.map((player) => {
+                  const payment = filteredPayments.find((item) => item.playerId === player.id);
+                  return (
+                    <div key={player.id} className="flex items-center gap-3 px-5 py-3">
+                      <PlayerAvatar player={player} />
+                      <div className="min-w-0 flex-1">
+                        <b>{player.nickname}</b>
+                        <p className="text-xs text-muted-foreground">Avulso · {payment?.paid ? 'Pago' : 'Pendente'}</p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-1 rounded-md border bg-muted/30 px-2 py-1">
+                          <span className="text-[10px] text-muted-foreground">R$</span>
+                          <input
+                            type="number"
+                            value={payment?.amount ?? monthlyValue}
+                            onChange={(e) => updatePaymentAmount(player, Number(e.target.value) || 0)}
+                            className="w-10 bg-transparent text-xs font-bold outline-none"
+                            min={0}
+                          />
+                        </div>
+                        <button onClick={() => togglePayment(player)} className={`payment ${payment?.paid ? 'paid' : 'pending'}`}>
+                          {payment?.paid ? <Check /> : <X />}{payment?.paid ? 'Em dia' : 'Pendente'}
+                        </button>
+                        <button onClick={() => removeAvulso(player.id)} className="rounded p-1 text-muted-foreground hover:text-red-500 transition-colors">
+                          <Trash2 className="size-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          <div className="border-t p-4">
+            {showAvulsoForm ? (
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  value={avulsoName}
+                  onChange={(e) => setAvulsoName(e.target.value)}
+                  placeholder="Nome do avulso"
+                  className="form-control h-9 flex-1 text-sm"
+                  autoFocus
+                  onKeyDown={(e) => { if (e.key === 'Enter') addAvulso(); if (e.key === 'Escape') setShowAvulsoForm(false); }}
+                />
+                <Button onClick={addAvulso} className="h-9 px-4"><Check className="size-4" /></Button>
+                <Button variant="outline" onClick={() => setShowAvulsoForm(false)} className="h-9 px-4"><X className="size-4" /></Button>
+              </div>
+            ) : (
+              <Button variant="outline" onClick={() => setShowAvulsoForm(true)} className="w-full">
+                <UserPlus className="size-4" /> Adicionar avulso
+              </Button>
+            )}
+          </div>
+        </section>
+      </div>
+    );
+  };
 
   /* ─── ARTS VIEW (with device photo picker) ─── */
   const artStats = stats.find((item) => item.player.id === artPlayerId) || stats[0];
@@ -881,6 +1195,10 @@ export function FutApp() {
      RENDER
      ═══════════════════════════════════════════ */
   const title = viewTitles[view];
+  const todayLabel = useMemo(() => {
+    const label = new Intl.DateTimeFormat('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' }).format(new Date());
+    return label.charAt(0).toUpperCase() + label.slice(1);
+  }, []);
   return (
     <main className="min-h-screen bg-background">
       <div className="mx-auto flex min-h-screen max-w-[1600px]">
@@ -900,10 +1218,11 @@ export function FutApp() {
         <section className="min-w-0 flex-1 pb-24 lg:pb-0">
           <header className="topbar">
             <div>
-              <button aria-label="Menu"><Menu /></button>
-              <span><small>Terça-feira, 1 de setembro</small><b>{navItems.find((item) => item.id === view)?.label}</b></span>
+              <button aria-label="Menu" onClick={() => setMenuOpen(true)}><Menu /></button>
+              <span><small>{todayLabel}</small><b>{navItems.find((item) => item.id === view)?.label}</b></span>
             </div>
             <div>
+              <Button variant="ghost" size="icon" className="!size-10 rounded-xl" aria-label="Alternar tema" title={`Tema: ${themeMode === 'dark' ? 'escuro' : themeMode === 'light' ? 'claro' : 'automático'}`} onClick={cycleTheme}><ThemeIcon /></Button>
               {view === 'players' && <Button variant="outline" onClick={() => setDialog('player')}><UserPlus /><span>Novo jogador</span></Button>}
               <Button onClick={() => { setMatchForm((form) => ({ ...form, selected: players.map((player) => player.id) })); setPreviewTeams(null); setDragPositions({}); setDialog('match'); }}><Plus /><span>Nova partida</span></Button>
             </div>
@@ -920,6 +1239,37 @@ export function FutApp() {
           </div>
         </section>
       </div>
+
+      {/* Mobile drawer */}
+      {menuOpen && (
+        <div className="fixed inset-0 z-40 lg:hidden">
+          <button aria-label="Fechar menu" onClick={() => setMenuOpen(false)} className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
+          <aside className="absolute inset-y-0 left-0 flex w-[268px] flex-col border-r border-line-inverse bg-surface-inverse px-4 py-5 shadow-2xl">
+            <div className="flex items-center justify-between">
+              <button onClick={() => { setView('dashboard'); setMenuOpen(false); }} className="brand"><span><Shield /></span><div><small>Fut das quintas</small><b>NA TRAVE</b></div></button>
+              <button aria-label="Fechar" onClick={() => setMenuOpen(false)} className="grid size-9 place-items-center rounded-xl text-ink-inverse-soft hover:bg-white/10 hover:text-ink-inverse"><X className="size-5" /></button>
+            </div>
+            <nav className="mt-8 space-y-1">
+              {navItems.map((item) => (
+                <button
+                  key={item.id}
+                  onClick={() => { setView(item.id); setMenuOpen(false); }}
+                  className={`flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-semibold transition ${view === item.id ? 'bg-white/10 text-ink-inverse shadow-[inset_3px_0_0_var(--primary)]' : 'text-ink-inverse-faint hover:bg-white/5 hover:text-ink-inverse'}`}
+                >
+                  <item.icon className={`size-[18px] ${view === item.id ? 'text-primary' : ''}`} />
+                  {item.label}
+                </button>
+              ))}
+            </nav>
+            <div className="cash-card">
+              <p><i className={connection} />{connection === 'online' ? 'Firebase conectado' : connection === 'connecting' ? 'Conectando' : 'Modo demonstração'}</p>
+              <strong>{money.format(monthlyRevenue)}</strong>
+              <small>{paidPayments.length} de {players.length} mensalistas em dia</small>
+              <div><i style={{ width: `${players.length ? paidPayments.length / players.length * 100 : 0}%` }} /></div>
+            </div>
+          </aside>
+        </div>
+      )}
 
       {/* Mobile nav */}
       <nav className="mobile-nav">{navItems.map((item) => <button key={item.id} onClick={() => setView(item.id)} className={view === item.id ? 'active' : ''}><item.icon />{item.short}</button>)}</nav>
@@ -1047,7 +1397,7 @@ export function FutApp() {
         <DialogContent>
           <DialogHeader><DialogTitle>{eventForm.type === 'goal' ? 'Registrar gol' : eventForm.type === 'save' ? 'Registrar defesa' : `Registrar ${eventForm.type}`}</DialogTitle><DialogDescription>O lance atualiza a súmula e os rankings.</DialogDescription></DialogHeader>
           {activeMatch && <div className="space-y-4">
-            <label className="form-label">Time<select value={eventForm.team} onChange={(e) => { const team = e.target.value as 'A' | 'B'; setEventForm({ ...eventForm, team, playerId: (team === 'A' ? activeMatch.teamA : activeMatch.teamB)[0] || '', assistPlayerId: '' }); }} className="form-control"><option value="A">{activeMatch.teamAName}</option><option value="B">{activeMatch.teamBName}</option></select></label>
+            <label className="form-label">Time<select value={eventForm.team} onChange={(e) => { const team = e.target.value as 'A' | 'B'; const goalkeeperId = team === 'A' ? activeMatch.goalkeeperAId : activeMatch.goalkeeperBId; setEventForm({ ...eventForm, team, playerId: (eventForm.type === 'save' ? goalkeeperId : undefined) || (team === 'A' ? activeMatch.teamA : activeMatch.teamB)[0] || '', assistPlayerId: '' }); }} className="form-control"><option value="A">{activeMatch.teamAName}</option><option value="B">{activeMatch.teamBName}</option></select></label>
             <label className="form-label">Jogador<select value={eventForm.playerId} onChange={(e) => setEventForm({ ...eventForm, playerId: e.target.value })} className="form-control">{(eventForm.team === 'A' ? activeMatch.teamA : activeMatch.teamB).map((id) => <option key={id} value={id}>{playerById(id)?.nickname}</option>)}</select></label>
             {eventForm.type === 'goal' && <label className="form-label">Assistência<select value={eventForm.assistPlayerId} onChange={(e) => setEventForm({ ...eventForm, assistPlayerId: e.target.value })} className="form-control"><option value="">Sem assistência</option>{(eventForm.team === 'A' ? activeMatch.teamA : activeMatch.teamB).filter((id) => id !== eventForm.playerId).map((id) => <option key={id} value={id}>{playerById(id)?.nickname}</option>)}</select></label>}
             <label className="form-label">Minuto<Input type="number" value={eventForm.minute} onChange={(e) => setEventForm({ ...eventForm, minute: e.target.value })} className="form-control" /></label>
@@ -1073,25 +1423,99 @@ export function FutApp() {
    HELPER COMPONENTS
    ═══════════════════════════════════════════ */
 
-function TeamSummary({ name, ids, players, align }: { name: string; ids: string[]; players: Player[]; align: 'left' | 'right' }) {
-  const list = ids.map((id) => players.find((player) => player.id === id)).filter(Boolean) as Player[];
-  return <div className={`min-w-0 ${align === 'right' ? 'text-right' : ''}`}><p className="truncate text-sm font-black uppercase sm:text-base">{name}</p><small className="hidden truncate text-white/40 sm:block">{list.map((player) => player.nickname).join(' · ')}</small></div>;
-}
-
-function ScoreCard({ match, players, onOpen }: { match: Match; players: Player[]; onOpen: () => void }) {
-  return <section className="score-card"><div className="score-top"><span>{match.status === 'live' ? 'Ao vivo' : 'Próximo jogo'}</span><small>{match.status === 'live' ? `${match.events.length + 32} min` : `${formatDate(match.date)} · ${match.time}`}</small><i>{match.venue}</i></div><div className="score-main"><div><TeamSummary name={match.teamAName} ids={match.teamA} players={players} align="right" /><span className="green"><Shirt /></span></div><strong>{match.scoreA}<i>—</i>{match.scoreB}</strong><div><span><Shirt /></span><TeamSummary name={match.teamBName} ids={match.teamB} players={players} align="left" /></div></div><div className="score-bottom"><div>{[...match.teamA, ...match.teamB].slice(0, 5).map((id) => <PlayerAvatar key={id} player={players.find((player) => player.id === id)} size="sm" />)}</div><Button onClick={onOpen}>Abrir súmula <ChevronRight /></Button></div></section>;
-}
-
-function PodiumCard({ stat, rank, medal, height, onClick }: { stat: PlayerStats; rank: number; medal: string; height: string; onClick: (id: string) => void }) {
+function MatchRoster({ name, players, goalkeeperId, team, onSetGoalkeeper }: {
+  name: string;
+  players: Player[];
+  goalkeeperId?: string;
+  team: 'A' | 'B';
+  onSetGoalkeeper: (playerId: string) => void;
+}) {
+  const accent = team === 'A' ? 'text-emerald-400' : 'text-blue-400';
   return (
-    <button onClick={() => onClick(stat.player.id)} className={`flex flex-col items-center gap-2 ${rank === 1 ? 'order-2' : rank === 2 ? 'order-1' : 'order-3'}`}>
-      <div className="relative">
-        <PlayerAvatar player={stat.player} size="lg" />
-        <span className="absolute -top-2 left-1/2 -translate-x-1/2 text-2xl">{medal}</span>
+    <aside className="match-roster" aria-label={`Jogadores do ${name}`}>
+      <div className="match-roster-heading">
+        <span className={team === 'A' ? 'bg-emerald-500' : 'bg-blue-500'} />
+        <div>
+          <h4 className={accent}>{name}</h4>
+          <p>{players.length} jogadores</p>
+        </div>
       </div>
-      <p className="max-w-[90px] truncate text-xs font-black text-white">{stat.player.nickname}</p>
-      <p className="text-2xl font-black tabular-nums text-primary">{stat.overall}</p>
-      <div className={`w-16 rounded-t-lg bg-white/10 ${height}`} />
+      <div className="match-roster-list">
+        {players.map((player) => {
+          const isGoalkeeper = player.id === goalkeeperId;
+          return (
+            <button
+              key={player.id}
+              type="button"
+              aria-pressed={isGoalkeeper}
+              onClick={() => onSetGoalkeeper(player.id)}
+              className={isGoalkeeper ? 'goalkeeper' : ''}
+              title={isGoalkeeper ? 'Goleiro atual. Clique para remover.' : 'Definir como goleiro'}
+            >
+              <PlayerAvatar player={player} size="sm" />
+              <span>
+                <b>{player.nickname}</b>
+                <small>{isGoalkeeper ? 'Goleiro em campo' : `${player.position} · camisa ${player.number}`}</small>
+              </span>
+              <ShieldCheck className="goalkeeper-icon" />
+            </button>
+          );
+        })}
+      </div>
+      <p className="match-roster-hint"><Shield className="size-3" /> Toque para trocar o goleiro</p>
+    </aside>
+  );
+}
+
+function TeamSummary({ name, ids, players, align, goalkeeperId, onSetGoalkeeper }: {
+  name: string; ids: string[]; players: Player[]; align: 'left' | 'right';
+  goalkeeperId?: string; onSetGoalkeeper?: (playerId: string) => void;
+}) {
+  const list = ids.map((id) => players.find((player) => player.id === id)).filter(Boolean) as Player[];
+  const textClass = align === 'right' ? 'text-right' : 'text-left';
+  return (
+    <div className={`min-w-0 ${textClass}`}>
+      <p className="truncate text-sm font-black uppercase sm:text-base">{name}</p>
+      <div className={`mt-1.5 space-y-0.5 ${align === 'right' ? 'text-right' : 'text-left'}`}>
+        {list.map((p) => {
+          const isGK = p.id === goalkeeperId;
+          return (
+            <button
+              key={p.id}
+              onClick={() => onSetGoalkeeper?.(p.id)}
+              className={`block w-full truncate text-xs transition-colors hover:underline ${
+                isGK ? 'font-black text-emerald-400' : 'font-medium text-ink-inverse-faint hover:text-ink-inverse'
+              }`}
+              title={isGK ? 'Goleiro atual (clique para remover)' : 'Clique para apontar como goleiro'}
+            >
+              {p.nickname}{isGK ? ' (GOL)' : ''}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+const PODIUM_COLORS: Record<number, string> = { 1: '#f4c542', 2: '#c7ced6', 3: '#d09359' };
+
+function PodiumCard({ stat, rank, value, suffix, height, onClick }: { stat: PlayerStats; rank: number; value: number; suffix: string; height: string; onClick: (id: string) => void }) {
+  const color = PODIUM_COLORS[rank];
+  return (
+    <button onClick={() => onClick(stat.player.id)} className={`group flex flex-col items-center gap-2 ${rank === 1 ? 'order-2' : rank === 2 ? 'order-1' : 'order-3'}`}>
+      <div className="relative transition group-hover:-translate-y-1">
+        <PlayerAvatar player={stat.player} size={rank === 1 ? 'lg' : 'md'} />
+        <span
+          className="absolute -top-2 left-1/2 grid size-6 -translate-x-1/2 place-items-center rounded-full border-2 border-surface-inverse text-[10px] font-black text-surface-inverse"
+          style={{ background: color }}
+        >
+          {rank}
+        </span>
+      </div>
+      <p className="max-w-[90px] truncate text-xs font-black text-ink-inverse">{stat.player.nickname}</p>
+      <p className="text-2xl font-black leading-none tabular-nums text-primary">{value}</p>
+      <p className="text-[9px] font-bold uppercase tracking-wider text-ink-inverse-faint">{suffix}</p>
+      <div className={`w-16 rounded-t-lg ${height}`} style={{ background: `linear-gradient(180deg, ${color}55 0%, ${color}12 100%)`, borderTop: `3px solid ${color}` }} />
     </button>
   );
 }

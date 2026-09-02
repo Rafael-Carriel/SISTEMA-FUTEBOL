@@ -15,6 +15,16 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800;900&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet" />
     <title>Na Trave · O placar do seu fut</title>
+    <script>
+      // Applies the theme before first paint to avoid a flash of the wrong palette.
+      try {
+        var stored = localStorage.getItem('natrave-theme');
+        var systemDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        var dark = stored === 'dark' || ((stored === 'system' || !stored) && systemDark);
+        if (dark) document.documentElement.classList.add('dark');
+        document.querySelector('meta[name="theme-color"]').setAttribute('content', dark ? '#0b1710' : '#f5f8f4');
+      } catch (e) {}
+    </script>
   </head>
   <body>
     <div id="root"></div>

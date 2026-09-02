@@ -316,7 +316,7 @@ function PitchHalf({
         className="relative overflow-hidden w-full"
         style={{
           aspectRatio: `${w} / ${h}`,
-          background: 'repeating-linear-gradient(90deg, rgba(255,255,255,.025) 0, rgba(255,255,255,.025) 12.5%, transparent 12.5%, transparent 25%), linear-gradient(180deg, #167934 0%, #0b4a20 100%)',
+          background: 'repeating-linear-gradient(90deg, rgba(255,255,255,.025) 0, rgba(255,255,255,.025) 12.5%, transparent 12.5%, transparent 25%), linear-gradient(180deg, var(--pitch-1) 0%, var(--pitch-2) 100%)',
           borderRadius: 18,
           border: `3px solid ${teamColor}`,
           boxShadow: `0 0 0 1px ${teamColor}30, inset 0 0 60px rgba(0,0,0,.18), 0 14px 36px rgba(0,0,0,0.22)`,

@@ -70,9 +70,10 @@ interface PitchHalfProps {
   compact: boolean;
   flip: boolean;
   format: MatchFormat;
+  goalkeeperId?: string;
 }
 
-function PitchHalf({ teamName, teamColor, players, w, h, compact, flip, format }: PitchHalfProps) {
+function PitchHalf({ teamName, teamColor, players, w, h, compact, flip, format, goalkeeperId }: PitchHalfProps) {
   return (
     <div className="flex flex-col items-center gap-2 w-full max-w-[280px]">
       <h4 className="text-xs font-black uppercase tracking-wider w-full" style={{ color: teamColor }}>
@@ -82,7 +83,7 @@ function PitchHalf({ teamName, teamColor, players, w, h, compact, flip, format }
         className="relative overflow-hidden w-full"
         style={{
           aspectRatio: `${w} / ${h}`,
-          background: 'linear-gradient(180deg, #1a7a2e 0%, #0f4d1a 100%)',
+          background: 'linear-gradient(180deg, var(--pitch-1) 0%, var(--pitch-2) 100%)',
           borderRadius: 14,
           border: `3px solid ${teamColor}`,
           boxShadow: `0 0 0 1px ${teamColor}30, 0 8px 32px rgba(0,0,0,0.25)`,
@@ -93,6 +94,7 @@ function PitchHalf({ teamName, teamColor, players, w, h, compact, flip, format }
         {players.map(({ player, x, y }) => {
           const px = flip ? 100 - x : x;
           const py = flip ? 100 - y : y;
+          const isGoalkeeper = player.id === goalkeeperId;
           return (
             <div
               key={player.id}
@@ -116,6 +118,11 @@ function PitchHalf({ teamName, teamColor, players, w, h, compact, flip, format }
                 >
                   {player.number}
                 </span>
+                {isGoalkeeper && (
+                  <span className="absolute -left-1 -top-1 grid size-[18px] place-items-center rounded-full border-2 border-white bg-surface-inverse text-[7px] font-black text-primary" title="Goleiro atual">
+                    G
+                  </span>
+                )}
               </div>
               <span className="mt-1 max-w-[72px] truncate text-center font-bold text-white drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)]" style={{ fontSize: compact ? '8px' : '9px', lineHeight: '1' }} title={`${player.nickname} #${player.number}`}>
                 {player.nickname}
@@ -138,6 +145,8 @@ interface PitchViewProps {
   teamBColor?: string;
   compact?: boolean;
   format?: MatchFormat;
+  goalkeeperAId?: string;
+  goalkeeperBId?: string;
 }
 
 export function PitchView({
@@ -149,12 +158,14 @@ export function PitchView({
   teamBColor = '#3b82f6',
   compact = false,
   format = 'F7',
+  goalkeeperAId,
+  goalkeeperBId,
 }: PitchViewProps) {
   const cleanTeamA = useMemo(() => dedupePlayers(teamA), [teamA]);
   const blocked = useMemo(() => new Set(cleanTeamA.map(playerIdentity)), [cleanTeamA]);
   const cleanTeamB = useMemo(() => dedupePlayers(teamB, blocked), [teamB, blocked]);
-  const placedA = useMemo(() => assignFormationPositions(cleanTeamA, format), [cleanTeamA, format]);
-  const placedB = useMemo(() => assignFormationPositions(cleanTeamB, format), [cleanTeamB, format]);
+  const placedA = useMemo(() => assignFormationPositions(cleanTeamA, format, goalkeeperAId), [cleanTeamA, format, goalkeeperAId]);
+  const placedB = useMemo(() => assignFormationPositions(cleanTeamB, format, goalkeeperBId), [cleanTeamB, format, goalkeeperBId]);
 
   // Adjust dimensions based on format
   const getDimensions = () => {
@@ -167,9 +178,9 @@ export function PitchView({
   const { w, h } = getDimensions();
 
   return (
-    <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
-      <PitchHalf teamName={teamAName} teamColor={teamAColor} players={placedA} w={w} h={h} compact={compact} flip={false} format={format} />
-      <PitchHalf teamName={teamBName} teamColor={teamBColor} players={placedB} w={w} h={h} compact={compact} flip={false} format={format} />
+    <div className="flex w-full flex-col justify-center gap-3 sm:flex-row sm:gap-4">
+      <PitchHalf teamName={teamAName} teamColor={teamAColor} players={placedA} w={w} h={h} compact={compact} flip={false} format={format} goalkeeperId={goalkeeperAId} />
+      <PitchHalf teamName={teamBName} teamColor={teamBColor} players={placedB} w={w} h={h} compact={compact} flip={false} format={format} goalkeeperId={goalkeeperBId} />
     </div>
   );
 }

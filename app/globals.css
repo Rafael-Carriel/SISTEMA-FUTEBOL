@@ -47,6 +47,26 @@
   --radius-2xl: calc(var(--radius) * 1.8);
   --radius-3xl: calc(var(--radius) * 2.2);
   --radius-4xl: calc(var(--radius) * 2.6);
+
+  /* semantic surfaces & ink — theme aware */
+  --color-canvas: var(--canvas);
+  --color-surface-1: var(--surface-1);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+  --color-overlay-1: var(--overlay-1);
+  --color-overlay-2: var(--overlay-2);
+  --color-ink: var(--ink);
+  --color-ink-soft: var(--ink-soft);
+  --color-ink-faint: var(--ink-faint);
+  --color-line: var(--line);
+  --color-surface-inverse: var(--surface-inverse);
+  --color-surface-inverse-2: var(--surface-inverse-2);
+  --color-surface-inverse-3: var(--surface-inverse-3);
+  --color-ink-inverse: var(--ink-inverse);
+  --color-ink-inverse-soft: var(--ink-inverse-soft);
+  --color-ink-inverse-faint: var(--ink-inverse-faint);
+  --color-line-inverse: var(--line-inverse);
+  --color-brand-ink: var(--brand-ink);
 }
 
 html {
@@ -95,32 +115,59 @@ body {
   --sidebar-accent-foreground: oklch(0.205 0 0);
   --sidebar-border: oklch(0.922 0 0);
   --sidebar-ring: oklch(0.708 0 0);
+
+  /* ─── Semantic theme tokens (switch with light/dark) ─── */
+  --canvas: oklch(0.974 0.008 105);
+  --surface-1: oklch(0.995 0.003 104);
+  --surface-2: oklch(0.955 0.012 110);
+  --surface-3: oklch(0.92 0.015 112);
+  --overlay-1: rgba(11, 23, 16, 0.045);
+  --overlay-2: rgba(11, 23, 16, 0.08);
+  --ink: oklch(0.21 0.03 145);
+  --ink-soft: oklch(0.46 0.025 142);
+  --ink-faint: oklch(0.60 0.02 140);
+  --line: oklch(0.88 0.014 114);
+  --settle: oklch(0.5 0.02 138);
+  --surface-inverse: oklch(0.175 0.026 150);
+  --surface-inverse-2: oklch(0.215 0.03 150);
+  --surface-inverse-3: oklch(0.265 0.035 150);
+  --ink-inverse: oklch(0.985 0.012 140);
+  --ink-inverse-soft: rgba(255, 255, 255, 0.62);
+  --ink-inverse-faint: rgba(255, 255, 255, 0.44);
+  --line-inverse: rgba(255, 255, 255, 0.1);
+  --pitch-1: oklch(0.47 0.16 142);
+  --pitch-2: oklch(0.32 0.13 145);
+  --pitch-line: rgba(255, 255, 255, 0.36);
+  --glow: rgba(186, 255, 85, 0.16);
+  /* Brand green for text on theme-aware surfaces. The lime `--primary` is
+     unreadable on the light canvas, so it is darkened here and restored in .dark. */
+  --brand-ink: oklch(0.53 0.15 143);
 }
 
 .dark {
-  --background: oklch(0.145 0 0);
+  --background: oklch(0.145 0.016 150);
   --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
+  --card: oklch(0.205 0.018 150);
   --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
+  --popover: oklch(0.205 0.018 150);
   --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
+  --primary: oklch(0.87 0.215 126);
+  --primary-foreground: oklch(0.16 0.03 145);
+  --secondary: oklch(0.269 0.024 150);
   --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.262 0.024 150);
+  --muted-foreground: oklch(0.72 0.02 145);
+  --accent: oklch(0.87 0.215 126);
+  --accent-foreground: oklch(0.16 0.03 145);
   --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
+  --border: oklch(1 0 0 / 11%);
+  --input: oklch(1 0 0 / 16%);
+  --ring: oklch(0.72 0.18 126);
+  --chart-1: oklch(0.87 0.215 126);
+  --chart-2: oklch(0.72 0.15 190);
+  --chart-3: oklch(0.7 0.17 55);
+  --chart-4: oklch(0.6 0.18 265);
+  --chart-5: oklch(0.65 0.17 20);
   --sidebar: oklch(0.205 0 0);
   --sidebar-foreground: oklch(0.985 0 0);
   --sidebar-primary: oklch(0.488 0.243 264.376);
@@ -129,6 +176,31 @@ body {
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.556 0 0);
+
+  /* ─── Semantic theme tokens (dark) ─── */
+  --canvas: oklch(0.166 0.022 152);
+  --surface-1: oklch(0.212 0.026 152);
+  --surface-2: oklch(0.252 0.03 152);
+  --surface-3: oklch(0.3 0.034 152);
+  --overlay-1: rgba(255, 255, 255, 0.05);
+  --overlay-2: rgba(255, 255, 255, 0.09);
+  --ink: oklch(0.96 0.012 140);
+  --ink-soft: oklch(0.74 0.02 145);
+  --ink-faint: oklch(0.58 0.02 145);
+  --line: oklch(1 0 0 / 10%);
+  --settle: oklch(0.708 0 0);
+  --surface-inverse: oklch(0.19 0.028 152);
+  --surface-inverse-2: oklch(0.235 0.032 152);
+  --surface-inverse-3: oklch(0.285 0.038 152);
+  --ink-inverse: oklch(0.985 0.012 140);
+  --ink-inverse-soft: rgba(255, 255, 255, 0.62);
+  --ink-inverse-faint: rgba(255, 255, 255, 0.42);
+  --line-inverse: rgba(255, 255, 255, 0.1);
+  --pitch-1: oklch(0.42 0.15 145);
+  --pitch-2: oklch(0.29 0.13 148);
+  --pitch-line: rgba(255, 255, 255, 0.3);
+  --glow: rgba(186, 255, 85, 0.1);
+  --brand-ink: var(--primary);
 }
 
 @layer base {
@@ -163,25 +235,25 @@ body {
   .rank-row > strong { @apply font-black tabular-nums antialiased; }
   .rank-row > strong small { @apply font-semibold text-muted-foreground; }
 
-  .sidebar { @apply sticky top-0 hidden h-screen w-[248px] shrink-0 flex-col border-r border-white/8 bg-[#08100c] px-4 py-5 lg:flex; }
+  .sidebar { @apply sticky top-0 hidden h-screen w-[248px] shrink-0 flex-col border-r border-line-inverse bg-surface-inverse px-4 py-5 lg:flex; }
   .brand { @apply flex items-center gap-3 px-2 text-left; }
   .brand > span { @apply grid size-10 place-items-center rounded-xl bg-primary text-primary-foreground; }
   .brand svg { @apply size-5; }
   .brand small { @apply block text-[11px] font-semibold uppercase tracking-[.18em] text-primary; }
-  .brand b { @apply block text-lg font-black tracking-tight text-white antialiased; }
+  .brand b { @apply block text-lg font-black tracking-tight text-ink-inverse antialiased; }
   .sidebar nav { @apply mt-9 space-y-1; }
-  .sidebar nav button { @apply flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-semibold text-white/48 transition hover:bg-white/5 hover:text-white; }
-  .sidebar nav button.active { @apply bg-white/10 text-white shadow-[inset_3px_0_0_#baff55]; }
+  .sidebar nav button { @apply flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-semibold text-ink-inverse-faint transition hover:bg-white/5 hover:text-ink-inverse; }
+  .sidebar nav button.active { @apply bg-white/10 text-ink-inverse shadow-[inset_3px_0_0_var(--primary)]; }
   .sidebar nav button.active svg { @apply text-primary; }
   .sidebar nav svg { @apply size-[18px]; }
-  .cash-card { @apply mt-auto rounded-2xl border border-white/8 bg-white/[.045] p-4; }
-  .cash-card p { @apply mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-white/38; }
+  .cash-card { @apply mt-auto rounded-2xl border border-line-inverse bg-white/[.045] p-4; }
+  .cash-card p { @apply mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-ink-inverse-faint; }
   .cash-card p i { @apply size-2 rounded-full bg-amber-400; }
   .cash-card p i.online { @apply bg-emerald-400; }
   .cash-card p i.demo { @apply bg-sky-400; }
-  .cash-card strong { @apply block text-2xl font-black tracking-tight text-white antialiased; }
-  .cash-card small { @apply mt-1 block text-xs text-white/42; }
-  .cash-card > div { @apply mt-3 h-1.5 overflow-hidden rounded-full bg-white/8; }
+  .cash-card strong { @apply block text-2xl font-black tracking-tight text-ink-inverse antialiased; }
+  .cash-card small { @apply mt-1 block text-xs text-ink-inverse-faint; }
+  .cash-card > div { @apply mt-3 h-1.5 overflow-hidden rounded-full bg-white/10; }
   .cash-card > div i { @apply block h-full rounded-full bg-primary; }
 
   .topbar { @apply sticky top-0 z-20 flex h-[74px] items-center justify-between border-b border-border bg-background/90 px-4 backdrop-blur md:px-8; }
@@ -193,28 +265,28 @@ body {
   .topbar [data-slot='button'] { @apply h-10 rounded-xl font-semibold; }
   .topbar [data-slot='button'] span { @apply hidden sm:inline; }
   .page-heading { @apply mb-5; }
-  .page-heading small { @apply mb-1 block text-[11px] font-bold uppercase tracking-[.18em] text-primary; }
+  .page-heading small { @apply mb-1 block text-[11px] font-bold uppercase tracking-[.18em] text-brand-ink; }
   .page-heading h1 { @apply text-2xl font-black tracking-[-.035em] antialiased sm:text-3xl; }
   .page-heading p { @apply mt-1 text-sm text-muted-foreground; }
 
-  .score-card { @apply relative overflow-hidden rounded-[24px] border border-white/10 bg-[#0b1710] p-5 text-white shadow-[0_24px_70px_rgba(10,25,14,.16)] sm:p-7; }
-  .score-card::after { content: ''; @apply pointer-events-none absolute -right-12 -top-24 size-72 rounded-full bg-primary/10 blur-3xl; }
+  .score-card { @apply relative overflow-hidden rounded-[24px] border border-line-inverse bg-surface-inverse p-5 text-ink-inverse shadow-[0_24px_70px_rgba(10,25,14,.16)] sm:p-7; }
+  .score-card::after { content: ''; @apply pointer-events-none absolute -right-12 -top-24 size-72 rounded-full bg-primary/12 blur-3xl; }
   .score-top { @apply relative flex flex-wrap items-center gap-2; }
   .score-top span { @apply rounded-full bg-red-500 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[.14em]; }
-  .score-top small { @apply text-xs font-semibold text-white/52; }
-  .score-top i { @apply ml-auto text-xs font-semibold not-italic text-white/42; }
+  .score-top small { @apply text-xs font-semibold text-ink-inverse-soft; }
+  .score-top i { @apply ml-auto text-xs font-semibold not-italic text-ink-inverse-faint; }
   .score-main { @apply relative my-7 grid grid-cols-[1fr_auto_1fr] items-center gap-3 sm:gap-8; }
   .score-main > div { @apply flex min-w-0 items-center gap-3; }
   .score-main > div:first-child { @apply justify-end; }
-  .score-main > div > span { @apply grid size-12 shrink-0 place-items-center rounded-2xl bg-white text-[#0b1710] sm:size-16; }
+  .score-main > div > span { @apply grid size-12 shrink-0 place-items-center rounded-2xl bg-white text-surface-inverse sm:size-16; }
   .score-main > div > span.green { @apply bg-primary; }
   .score-main > div > span svg { @apply size-6 sm:size-8; fill: currentColor; }
   .score-main > strong { @apply flex items-center gap-2 text-5xl font-black tabular-nums tracking-tighter antialiased sm:gap-4 sm:text-7xl; }
-  .score-main > strong i { @apply text-xl not-italic text-white/28 sm:text-3xl; }
-  .score-bottom { @apply relative flex flex-col items-stretch justify-between gap-3 border-t border-white/8 pt-4 sm:flex-row sm:items-center; }
+  .score-main > strong i { @apply text-xl not-italic text-ink-inverse-faint sm:text-3xl; }
+  .score-bottom { @apply relative flex flex-col items-stretch justify-between gap-3 border-t border-line-inverse pt-4 sm:flex-row sm:items-center; }
   .score-bottom > div { @apply flex -space-x-2; }
-  .score-bottom > div > span { @apply border-2 border-[#0b1710]; }
-  .score-bottom [data-slot='button'] { @apply h-10 rounded-xl bg-white px-5 font-semibold text-[#0b1710] hover:bg-white/90; }
+  .score-bottom > div > span { @apply border-2 border-surface-inverse; }
+  .score-bottom [data-slot='button'] { @apply h-10 rounded-xl bg-white px-5 font-semibold text-surface-inverse hover:bg-white/90; }
 
   .status-dot { @apply size-2 rounded-full bg-slate-400; }
   .status-dot.live { @apply bg-red-500 animate-pulse; }
@@ -222,37 +294,60 @@ body {
   .match-score { @apply my-5 grid grid-cols-[1fr_auto_1fr] items-center gap-3 rounded-2xl bg-[#0b1710] p-4 text-white sm:px-6; }
   .match-score > strong { @apply flex items-center gap-2 text-4xl font-black tracking-tighter antialiased; }
   .match-score > strong i { @apply text-lg not-italic text-white/30; }
+  .match-scoreboard { @apply mx-auto mt-5 grid w-full max-w-2xl grid-cols-[1fr_auto_1fr] items-center gap-x-3 rounded-[22px] border border-line-inverse bg-surface-inverse px-4 py-4 text-center text-ink-inverse shadow-[0_14px_40px_rgba(10,25,14,.14)] sm:gap-x-8 sm:px-7; }
+  .match-scoreboard > p { @apply truncate text-[10px] font-black uppercase tracking-[.14em] text-ink-inverse-soft sm:text-xs; }
+  .match-scoreboard > div { @apply flex items-center justify-center gap-2 text-4xl font-black tabular-nums tracking-[-.06em] sm:gap-3 sm:text-5xl; }
+  .match-scoreboard > div span { @apply text-base text-ink-inverse-faint/40; }
+  .match-scoreboard > small { @apply col-start-2 mt-1 text-[9px] font-semibold text-ink-inverse-faint; }
+  .match-lineup-layout { @apply mt-5 grid grid-cols-1 items-start gap-4 xl:grid-cols-[minmax(170px,210px)_minmax(0,580px)_minmax(170px,210px)] xl:justify-center; }
+  .match-pitches { @apply min-w-0 xl:pt-1; }
+  .match-roster { @apply min-w-0 rounded-[18px] border border-line-inverse bg-surface-inverse p-3 text-ink-inverse shadow-[0_12px_32px_rgba(10,25,14,.12)]; }
+  .match-roster-heading { @apply mb-3 flex items-center gap-2.5 border-b border-line-inverse pb-3; }
+  .match-roster-heading > span { @apply size-2.5 shrink-0 rounded-full shadow-[0_0_12px_currentColor]; }
+  .match-roster-heading h4 { @apply truncate text-[11px] font-black uppercase tracking-[.12em]; }
+  .match-roster-heading p { @apply mt-0.5 text-[9px] font-semibold text-ink-inverse-faint; }
+  .match-roster-list { @apply grid gap-1.5 sm:grid-cols-2 xl:grid-cols-1; }
+  .match-roster-list > button { @apply flex min-w-0 items-center gap-2 rounded-xl border border-transparent px-2 py-1.5 text-left transition hover:border-line-inverse hover:bg-white/[.06]; }
+  .match-roster-list > button.goalkeeper { @apply border-primary/35 bg-primary/10 shadow-[inset_3px_0_0_var(--primary)]; }
+  .match-roster-list > button > span:nth-child(2) { @apply min-w-0 flex-1; }
+  .match-roster-list b { @apply block truncate text-xs font-bold; }
+  .match-roster-list small { @apply block truncate text-[9px] font-medium text-ink-inverse-faint; }
+  .match-roster-list .goalkeeper small { @apply font-bold text-primary; }
+  .goalkeeper-icon { @apply size-3.5 shrink-0 text-ink-inverse-faint opacity-0 transition; }
+  .match-roster-list button:hover .goalkeeper-icon { @apply opacity-60; }
+  .match-roster-list .goalkeeper .goalkeeper-icon { @apply text-primary opacity-100; }
+  .match-roster-hint { @apply mt-3 flex items-center justify-center gap-1 border-t border-line-inverse pt-2.5 text-[9px] font-semibold text-ink-inverse-faint; }
   .event-row { @apply flex items-center gap-2 rounded-xl bg-muted px-3 py-2 text-xs; }
   .event-row span { @apply grid size-7 place-items-center rounded-lg bg-card; }
   .event-row b { @apply min-w-0 flex-1 truncate; }
   .event-row small { @apply text-muted-foreground; }
 
   .player-card { @apply overflow-hidden rounded-[22px] border border-border bg-card text-left transition hover:-translate-y-1 hover:shadow-xl; }
-  .player-card-head { @apply relative flex items-center gap-4 bg-[#0b1710] p-5 text-white; }
+  .player-card-head { @apply relative flex items-center gap-4 bg-surface-inverse p-5 text-ink-inverse; }
   .player-card-head p { @apply text-[10px] font-bold uppercase tracking-widest text-primary; }
   .player-card-head h3 { @apply truncate text-lg font-black antialiased; }
-  .player-card-head small { @apply block truncate text-xs text-white/42; }
+  .player-card-head small { @apply block truncate text-xs text-ink-inverse-faint; }
   .overall { @apply text-center text-3xl font-black text-primary antialiased; }
-  .overall small { @apply block text-[9px] font-semibold text-white/40; }
-  .big-player-card { @apply flex items-center gap-4 overflow-hidden rounded-[24px] bg-[#0b1710] p-5 text-white; }
+  .overall small { @apply block text-[9px] font-semibold text-ink-inverse-faint; }
+  .big-player-card { @apply flex items-center gap-4 overflow-hidden rounded-[24px] bg-surface-inverse p-5 text-ink-inverse; }
   .big-player-card > div { @apply min-w-0 flex-1; }
   .big-player-card > div small { @apply font-bold uppercase tracking-widest text-primary; }
   .big-player-card > div h3 { @apply truncate text-2xl font-black antialiased; }
-  .big-player-card > div p { @apply truncate text-sm text-white/40; }
+  .big-player-card > div p { @apply truncate text-sm text-ink-inverse-faint; }
   .big-player-card > strong { @apply text-center text-4xl font-black text-primary antialiased; }
-  .big-player-card > strong small { @apply block text-[8px] text-white/35; }
+  .big-player-card > strong small { @apply block text-[8px] text-ink-inverse-faint; }
   .rating { @apply grid grid-cols-[92px_1fr_42px] items-center gap-3 text-xs font-bold; }
-  .rating input { @apply accent-[#8fd92c]; }
+  .rating input { @apply accent-[var(--primary)]; }
   .rating b { @apply rounded-lg bg-muted px-2 py-1 text-center tabular-nums; }
 
   .metric-card { @apply flex items-center gap-4 rounded-[22px] border border-border bg-card p-5; }
   .metric-card > svg { @apply size-9 rounded-xl bg-primary p-2 text-primary-foreground; }
   .metric-card p { @apply text-xs font-bold text-muted-foreground; }
   .metric-card strong { @apply text-xl font-bold; }
-  .payment { @apply flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold; }
+  .payment { @apply flex items-center gap-2 rounded-xl border px-3 py-2 text-xs font-semibold transition; }
   .payment svg { @apply size-4; }
-  .payment.paid { @apply bg-emerald-100 text-emerald-800; }
-  .payment.pending { @apply bg-red-50 text-red-700; }
+  .payment.paid { @apply border-emerald-500/25 bg-emerald-500/12 text-emerald-700 hover:bg-emerald-500/20 dark:text-emerald-300; }
+  .payment.pending { @apply border-red-500/25 bg-red-500/10 text-red-700 hover:bg-red-500/18 dark:text-red-300; }
 
   .form-label { @apply block text-xs font-semibold text-foreground; }
   .form-control { @apply mt-1.5 h-10 w-full rounded-xl border border-input bg-background px-3 text-sm font-medium outline-none antialiased focus:border-primary focus:ring-2 focus:ring-primary/20; }
@@ -267,18 +362,18 @@ body {
   .roster button > b { @apply min-w-0 flex-1 truncate text-sm; }
   .roster button > small { @apply text-xs font-bold text-muted-foreground; }
 
-  .draft-trigger { @apply relative mt-2 flex w-full items-center gap-3 overflow-hidden rounded-2xl border border-primary/30 bg-[#0b1710] p-4 text-left text-white shadow-[0_16px_40px_rgba(11,23,16,.14)] transition hover:-translate-y-0.5 hover:border-primary; }
+  .draft-trigger { @apply relative mt-2 flex w-full items-center gap-3 overflow-hidden rounded-2xl border border-primary/30 bg-surface-inverse p-4 text-left text-ink-inverse shadow-[0_16px_40px_rgba(11,23,16,.14)] transition hover:-translate-y-0.5 hover:border-primary; }
   .draft-trigger:disabled { @apply cursor-wait; }
   .draft-trigger-icon { @apply grid size-11 shrink-0 place-items-center rounded-xl bg-primary text-primary-foreground; }
   .draft-trigger-icon svg { @apply size-5; }
   .draft-trigger > span:nth-child(2) { @apply min-w-0 flex-1; }
   .draft-trigger b { @apply block text-sm font-black antialiased; }
-  .draft-trigger small { @apply mt-0.5 block text-[10px] font-semibold text-white/45; }
-  .draft-trigger > svg { @apply size-5 text-white/30; }
+  .draft-trigger small { @apply mt-0.5 block text-[10px] font-semibold text-ink-inverse-faint; }
+  .draft-trigger > svg { @apply size-5 text-ink-inverse-faint; }
   .draft-trigger.drawing .draft-trigger-icon { animation: tactical-pulse .7s ease-in-out infinite; }
   .draft-trigger.drawing::after { content: ''; @apply absolute inset-y-0 w-20 bg-gradient-to-r from-transparent via-white/10 to-transparent; animation: tactical-scan 1s linear infinite; }
   .draft-result { animation: draft-reveal .5s cubic-bezier(.2,.9,.25,1) both; }
-  .balance-chip { @apply flex items-center gap-1 rounded-xl bg-emerald-100 px-3 py-2 text-[10px] font-semibold text-emerald-700; }
+  .balance-chip { @apply flex items-center gap-1 rounded-xl border border-emerald-500/25 bg-emerald-500/12 px-3 py-2 text-[10px] font-semibold text-emerald-700 dark:text-emerald-300; }
   .balance-chip svg { @apply size-3.5; }
   .lineup-team { min-width: 0; }
   .lineup-player { opacity: 0; animation: player-drop .46s cubic-bezier(.2,.9,.25,1.2) forwards; }
@@ -296,11 +391,11 @@ body {
   .art-copy strong { @apply mt-3 block text-[clamp(20px,4vw,40px)] font-black antialiased; }
   .art-preview footer { @apply absolute inset-x-[7%] bottom-[6%] border-t border-white/15 pt-3 text-[10px] font-semibold uppercase tracking-[.18em] text-white/45; }
 
-  .mobile-nav { @apply fixed inset-x-3 bottom-3 z-30 grid grid-cols-6 rounded-2xl border border-white/10 bg-[#0b1710]/95 p-1.5 text-white shadow-2xl backdrop-blur lg:hidden; }
-  .mobile-nav button { @apply flex min-w-0 flex-col items-center gap-1 rounded-xl px-0.5 py-2 text-[8px] font-semibold text-white/44; }
+  .mobile-nav { @apply fixed inset-x-3 bottom-3 z-30 grid grid-cols-6 rounded-2xl border border-line-inverse bg-surface-inverse/95 p-1.5 text-ink-inverse shadow-2xl backdrop-blur lg:hidden; }
+  .mobile-nav button { @apply flex min-w-0 flex-col items-center gap-1 rounded-xl px-0.5 py-2 text-[8px] font-semibold text-ink-inverse-faint; }
   .mobile-nav button.active { @apply bg-white/9 text-primary; }
   .mobile-nav svg { @apply size-[17px]; }
-  .notice { @apply fixed bottom-24 left-1/2 z-50 flex -translate-x-1/2 items-center gap-2 whitespace-nowrap rounded-2xl bg-[#0b1710] px-4 py-3 text-sm font-semibold text-white shadow-2xl antialiased lg:bottom-6; }
+  .notice { @apply fixed bottom-24 left-1/2 z-50 flex -translate-x-1/2 items-center gap-2 whitespace-nowrap rounded-2xl bg-surface-inverse px-4 py-3 text-sm font-semibold text-ink-inverse shadow-2xl antialiased lg:bottom-6; }
   .notice svg { @apply size-4 text-primary; }
 
   /* Ranking tabs */
