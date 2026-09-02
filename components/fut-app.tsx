@@ -91,7 +91,7 @@ function calculateStats(players: Player[], matches: Match[]): PlayerStats[] {
 /* ─── shared UI components ─── */
 function PlayerAvatar({ player, size = 'md' }: { player?: Player; size?: 'sm' | 'md' | 'lg' | 'xl' }) {
   const sizes = { sm: 'size-8 text-[9px]', md: 'size-11 text-xs', lg: 'size-14 text-sm', xl: 'size-24 text-2xl' };
-  return <span className={`relative grid shrink-0 place-items-center overflow-hidden rounded-2xl bg-primary font-black text-primary-foreground ${sizes[size]}`}>{player?.photoUrl ? <img src={player.photoUrl} alt="" className="h-full w-full object-cover" /> : initials(player)}</span>;
+  return <span className={`relative grid shrink-0 place-items-center overflow-hidden rounded-2xl bg-primary font-black text-primary-foreground antialiased ${sizes[size]}`}>{player?.photoUrl ? <img src={player.photoUrl} alt="" className="h-full w-full object-cover" /> : initials(player)}</span>;
 }
 function StatPill({ value, label }: { value: number; label: string }) { return <div className="rounded-2xl bg-muted p-3"><p className="text-xl font-black tabular-nums">{value}</p><p className="stat-label">{label}</p></div>; }
 function Metric({ icon: Icon, label, value }: { icon: typeof Users; label: string; value: string }) { return <div className="metric-card"><Icon /><div><p>{label}</p><strong>{value}</strong></div></div>; }
@@ -503,7 +503,7 @@ export function FutApp() {
                 </div>
                 <button
                   onClick={() => { setActiveMatchId(match.id); setView('matches'); }}
-                  className="rounded-xl bg-white/10 px-3 py-1.5 text-xs font-bold text-white/60 transition hover:bg-white/15 hover:text-white"
+                  className="rounded-xl bg-white/10 px-3 py-1.5 text-xs font-semibold text-white/60 transition hover:bg-white/15 hover:text-white"
                 >
                   Abrir súmula →
                 </button>
@@ -514,7 +514,7 @@ export function FutApp() {
                 <div className="text-right">
                   <p className="text-xs font-black uppercase tracking-wider text-white/40">{match.teamAName}</p>
                 </div>
-                <div className="flex items-center gap-3 text-7xl font-black tabular-nums tracking-tighter text-white sm:text-8xl">
+                <div className="flex items-center gap-3 text-7xl font-black tabular-nums tracking-tighter text-white antialiased sm:text-8xl">
                   <span>{match.scoreA}</span>
                   <span className="text-white/15">—</span>
                   <span>{match.scoreB}</span>
@@ -588,7 +588,7 @@ export function FutApp() {
                 />
               </div>
             </div>
-            <Button onClick={() => setView('payments')} className="mt-4 h-10 w-full rounded-xl font-extrabold" variant="outline">
+            <Button onClick={() => setView('payments')} className="mt-4 h-10 w-full rounded-xl font-semibold" variant="outline">
               Ver mensalidades <ChevronRight className="size-4" />
             </Button>
           </section>
@@ -612,7 +612,7 @@ export function FutApp() {
                   <span className={`rank-number ${index === 0 ? 'top' : ''}`}>{index + 1}</span>
                   <PlayerAvatar player={item.player} size="sm" />
                   <div className="min-w-0 flex-1">
-                    <p className="truncate font-extrabold">{item.player.nickname}</p>
+                    <p className="truncate font-bold">{item.player.nickname}</p>
                     <p className="text-xs text-muted-foreground">
                       {item.goals} gols · {item.assists} assist.
                     </p>
@@ -777,7 +777,7 @@ export function FutApp() {
             <button
               key={section.key}
               onClick={() => setRankingTab(section.key)}
-              className={`flex items-center gap-2 whitespace-nowrap rounded-xl px-4 py-2.5 text-sm font-extrabold transition-all ${rankingTab === section.key ? 'bg-primary text-primary-foreground shadow-md' : 'bg-muted text-muted-foreground hover:bg-muted/80'}`}
+              className={`flex items-center gap-2 whitespace-nowrap rounded-xl px-4 py-2.5 text-sm font-bold transition-all ${rankingTab === section.key ? 'bg-primary text-primary-foreground shadow-md' : 'bg-muted text-muted-foreground hover:bg-muted/80'}`}
             >
               <section.icon className="size-4" />
               {section.title}
@@ -975,7 +975,7 @@ export function FutApp() {
                     key={opt.value}
                     type="button"
                     onClick={() => setMatchForm({ ...matchForm, format: opt.value })}
-                    className={`flex-1 rounded-xl border-2 px-3 py-2.5 text-sm font-extrabold transition-all ${
+                    className={`flex-1 rounded-xl border-2 px-3 py-2.5 text-sm font-bold transition-all ${
                       matchForm.format === opt.value
                         ? 'border-primary bg-primary/10 text-primary'
                         : 'border-border bg-muted/50 text-muted-foreground hover:border-muted-foreground/30'
@@ -1014,7 +1014,7 @@ export function FutApp() {
                     <div><p className="text-[10px] font-black uppercase tracking-[.18em] text-primary">Escalação pronta</p><h3 className="mt-0.5 text-base font-black">Quadro tático</h3></div>
                     <div className="flex items-center gap-2">
                       {previewBalance && <span className="balance-chip"><Check /> {previewBalance.percentage}% equilibrado</span>}
-                      <button onClick={previewDraft} className="rounded-xl border border-border bg-background px-3 py-2 text-xs font-extrabold transition hover:border-primary hover:text-primary"><Sparkles className="mr-1 inline size-3.5" /> Sortear novamente</button>
+                      <button onClick={previewDraft} className="rounded-xl border border-border bg-background px-3 py-2 text-xs font-semibold transition hover:border-primary hover:text-primary"><Sparkles className="mr-1 inline size-3.5" /> Sortear novamente</button>
                       <button onClick={() => { setPreviewTeams(null); setDragPositions({}); }} className="grid size-8 place-items-center rounded-xl text-muted-foreground hover:bg-muted hover:text-foreground" aria-label="Limpar sorteio"><X className="size-4" /></button>
                     </div>
                   </div>
