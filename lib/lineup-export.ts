@@ -1,59 +1,9 @@
-import type { FieldPositions, Match, Player, Position } from './fut-types';
-
-/* ─── default position layout (same as pitch-view) ─── */
-const POSITION_COORDS: Record<Position, { x: number; y: number }[]> = {
-  GOL: [{ x: 50, y: 90 }],
-  ZAG: [
-    { x: 25, y: 74 },
-    { x: 50, y: 70 },
-    { x: 75, y: 74 },
-    { x: 15, y: 76 },
-    { x: 85, y: 76 },
-  ],
-  MEI: [
-    { x: 20, y: 52 },
-    { x: 50, y: 48 },
-    { x: 80, y: 52 },
-    { x: 35, y: 56 },
-    { x: 65, y: 56 },
-    { x: 10, y: 54 },
-    { x: 90, y: 54 },
-  ],
-  ATA: [
-    { x: 30, y: 26 },
-    { x: 50, y: 22 },
-    { x: 70, y: 26 },
-    { x: 40, y: 32 },
-    { x: 60, y: 32 },
-  ],
-};
-
-function getPositionCoords(count: number, position: Position): { x: number; y: number }[] {
-  const base = POSITION_COORDS[position];
-  if (count <= base.length) return base.slice(0, count);
-  const result = [...base];
-  for (let i = 0; i < count - base.length; i++) {
-    const anchor = base[base.length - 1];
-    result.push({ x: anchor.x + (i % 2 === 0 ? -8 : 8), y: anchor.y + (i % 2 === 0 ? 3 : -3) });
-  }
-  return result;
-}
-
-function assignDefaultPositions(players: Player[]): Array<{ player: Player; x: number; y: number }> {
-  const byPos: Record<Position, Player[]> = { GOL: [], ZAG: [], MEI: [], ATA: [] };
-  players.forEach((p) => byPos[p.position].push(p));
-  const result: Array<{ player: Player; x: number; y: number }> = [];
-  for (const pos of ['GOL', 'ZAG', 'MEI', 'ATA'] as Position[]) {
-    const coords = getPositionCoords(byPos[pos].length, pos);
-    byPos[pos].forEach((player, idx) => {
-      result.push({ player, x: coords[idx].x, y: coords[idx].y });
-    });
-  }
-  return result;
-}
+import type { FieldPositions, Match, MatchFormat, Player } from './fut-types';
+import { assignFormationPositions } from './formation-layout';
 
 function resolvePositions(
   players: Player[],
+  format: MatchFormat,
   fieldPositions?: FieldPositions,
 ): Array<{ player: Player; x: number; y: number }> {
   if (fieldPositions && Object.keys(fieldPositions).length > 0) {
@@ -63,7 +13,7 @@ function resolvePositions(
       y: fieldPositions[player.id]?.y ?? 50,
     }));
   }
-  return assignDefaultPositions(players);
+  return assignFormationPositions(players, format);
 }
 
 function initials(player: Player): string {
@@ -271,8 +221,8 @@ export async function exportLineup(
   drawFieldLines(ctx, fieldBX, fieldY, fieldW, fieldH);
 
   // Resolve positions
-  const placedA = resolvePositions(teamAPlayers, match.fieldPositions);
-  const placedB = resolvePositions(teamBPlayers, match.fieldPositions);
+  const placedA = resolvePositions(teamAPlayers, match.format ?? 'F7', match.fieldPositions);
+  const placedB = resolvePositions(teamBPlayers, match.format ?? 'F7', match.fieldPositions);
 
   // Draw teams
   drawTeam(ctx, placedA, fieldAX, fieldY, fieldW, fieldH, '#16a34a', false);

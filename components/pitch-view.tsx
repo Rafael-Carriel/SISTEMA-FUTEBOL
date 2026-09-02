@@ -1,7 +1,8 @@
 'use client';
 
 import { useMemo } from 'react';
-import type { MatchFormat, Player, Position } from '@/lib/fut-types';
+import type { MatchFormat, Player } from '@/lib/fut-types';
+import { assignFormationPositions } from '@/lib/formation-layout';
 
 /* ─── helpers ─── */
 function initials(player: Player): string {
@@ -25,94 +26,6 @@ function dedupePlayers(players: Player[], blocked = new Set<string>()): Player[]
     people.add(identity);
     return true;
   });
-}
-
-/* ─── position layout coordinates by format ─── */
-const POSITION_COORDS: Record<MatchFormat, Record<Position, { x: number; y: number }[]>> = {
-  F5: {
-    GOL: [{ x: 50, y: 92 }],
-    ZAG: [{ x: 30, y: 70 }, { x: 70, y: 70 }],
-    MEI: [{ x: 50, y: 50 }],
-    ATA: [{ x: 30, y: 28 }, { x: 70, y: 28 }],
-  },
-  F7: {
-    GOL: [{ x: 50, y: 90 }],
-    ZAG: [
-      { x: 25, y: 74 },
-      { x: 50, y: 70 },
-      { x: 75, y: 74 },
-      { x: 15, y: 76 },
-      { x: 85, y: 76 },
-    ],
-    MEI: [
-      { x: 20, y: 52 },
-      { x: 50, y: 48 },
-      { x: 80, y: 52 },
-      { x: 35, y: 56 },
-      { x: 65, y: 56 },
-      { x: 10, y: 54 },
-      { x: 90, y: 54 },
-    ],
-    ATA: [
-      { x: 30, y: 26 },
-      { x: 50, y: 22 },
-      { x: 70, y: 26 },
-      { x: 40, y: 32 },
-      { x: 60, y: 32 },
-    ],
-  },
-  F11: {
-    GOL: [{ x: 50, y: 94 }],
-    ZAG: [
-      { x: 20, y: 76 },
-      { x: 40, y: 72 },
-      { x: 60, y: 72 },
-      { x: 80, y: 76 },
-      { x: 10, y: 78 },
-      { x: 90, y: 78 },
-    ],
-    MEI: [
-      { x: 25, y: 52 },
-      { x: 50, y: 48 },
-      { x: 75, y: 52 },
-      { x: 15, y: 56 },
-      { x: 85, y: 56 },
-      { x: 35, y: 58 },
-      { x: 65, y: 58 },
-    ],
-    ATA: [
-      { x: 30, y: 28 },
-      { x: 50, y: 24 },
-      { x: 70, y: 28 },
-      { x: 40, y: 34 },
-      { x: 60, y: 34 },
-    ],
-  },
-};
-
-function getPositionCoords(count: number, position: Position, format: MatchFormat): { x: number; y: number }[] {
-  const base = POSITION_COORDS[format][position];
-  if (count <= base.length) return base.slice(0, count);
-  const result = [...base];
-  for (let i = 0; i < count - base.length; i++) {
-    const anchor = base[base.length - 1];
-    result.push({ x: anchor.x + (i % 2 === 0 ? -8 : 8), y: anchor.y + (i % 2 === 0 ? 3 : -3) });
-  }
-  return result;
-}
-
-function assignPositions(players: Player[], format: MatchFormat): Array<{ player: Player; x: number; y: number }> {
-  const byPos: Record<Position, Player[]> = { GOL: [], ZAG: [], MEI: [], ATA: [] };
-  players.forEach((p) => byPos[p.position].push(p));
-
-  const result: Array<{ player: Player; x: number; y: number }> = [];
-  for (const pos of ['GOL', 'ZAG', 'MEI', 'ATA'] as Position[]) {
-    const coords = getPositionCoords(byPos[pos].length, pos, format);
-    byPos[pos].forEach((player, idx) => {
-      result.push({ player, x: coords[idx].x, y: coords[idx].y });
-    });
-  }
-  return result;
 }
 
 /* ─── SVG field markings ─── */
@@ -240,8 +153,8 @@ export function PitchView({
   const cleanTeamA = useMemo(() => dedupePlayers(teamA), [teamA]);
   const blocked = useMemo(() => new Set(cleanTeamA.map(playerIdentity)), [cleanTeamA]);
   const cleanTeamB = useMemo(() => dedupePlayers(teamB, blocked), [teamB, blocked]);
-  const placedA = useMemo(() => assignPositions(cleanTeamA, format), [cleanTeamA, format]);
-  const placedB = useMemo(() => assignPositions(cleanTeamB, format), [cleanTeamB, format]);
+  const placedA = useMemo(() => assignFormationPositions(cleanTeamA, format), [cleanTeamA, format]);
+  const placedB = useMemo(() => assignFormationPositions(cleanTeamB, format), [cleanTeamB, format]);
 
   // Adjust dimensions based on format
   const getDimensions = () => {

@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { GripVertical, MousePointer2 } from 'lucide-react';
-import type { Player, Position, MatchFormat, FieldPositions } from '@/lib/fut-types';
+import type { Player, MatchFormat, FieldPositions } from '@/lib/fut-types';
+import { assignFormationPositions } from '@/lib/formation-layout';
 
 /* ─── helpers ─── */
 function initials(player: Player): string {
@@ -26,53 +27,6 @@ function dedupePlayers(players: Player[], blocked = new Set<string>()): Player[]
     seenPeople.add(identity);
     return true;
   });
-}
-
-/* ─── default position coordinates by format ─── */
-const DEFAULT_POSITIONS: Record<MatchFormat, Record<Position, { x: number; y: number }[]>> = {
-  F5: {
-    GOL: [{ x: 50, y: 92 }],
-    ZAG: [{ x: 30, y: 70 }, { x: 70, y: 70 }],
-    MEI: [{ x: 50, y: 50 }],
-    ATA: [{ x: 30, y: 28 }, { x: 70, y: 28 }],
-  },
-  F7: {
-    GOL: [{ x: 50, y: 92 }],
-    ZAG: [{ x: 25, y: 72 }, { x: 50, y: 68 }, { x: 75, y: 72 }],
-    MEI: [{ x: 30, y: 48 }, { x: 50, y: 44 }, { x: 70, y: 48 }],
-    ATA: [{ x: 35, y: 24 }, { x: 65, y: 24 }],
-  },
-  F11: {
-    GOL: [{ x: 50, y: 94 }],
-    ZAG: [{ x: 20, y: 76 }, { x: 40, y: 72 }, { x: 60, y: 72 }, { x: 80, y: 76 }],
-    MEI: [{ x: 25, y: 52 }, { x: 50, y: 48 }, { x: 75, y: 52 }, { x: 15, y: 56 }, { x: 85, y: 56 }],
-    ATA: [{ x: 30, y: 28 }, { x: 50, y: 24 }, { x: 70, y: 28 }],
-  },
-};
-
-function getDefaultPositions(
-  players: Player[],
-  format: MatchFormat = 'F7'
-): Array<{ player: Player; x: number; y: number }> {
-  const byPos: Record<Position, Player[]> = { GOL: [], ZAG: [], MEI: [], ATA: [] };
-  players.forEach((p) => byPos[p.position].push(p));
-
-  const result: Array<{ player: Player; x: number; y: number }> = [];
-  const coords = DEFAULT_POSITIONS[format];
-  for (const pos of ['GOL', 'ZAG', 'MEI', 'ATA'] as Position[]) {
-    const posCoords = coords[pos];
-    byPos[pos].forEach((player, idx) => {
-      const coord = posCoords[idx % posCoords.length];
-      const extraRow = Math.floor(idx / posCoords.length);
-      const direction = extraRow % 2 === 0 ? 1 : -1;
-      result.push({
-        player,
-        x: Math.max(10, Math.min(90, coord.x + direction * extraRow * 9)),
-        y: Math.max(10, Math.min(94, coord.y + extraRow * 7)),
-      });
-    });
-  }
-  return result;
 }
 
 /* ─── SVG field markings ─── */
@@ -428,8 +382,8 @@ export function DraggablePitch({
     if (fieldPositions && Object.keys(fieldPositions).length > 0) {
       setPositions(fieldPositions);
     } else {
-      const defaultsA = getDefaultPositions(cleanTeamA, format);
-      const defaultsB = getDefaultPositions(cleanTeamB, format);
+      const defaultsA = assignFormationPositions(cleanTeamA, format);
+      const defaultsB = assignFormationPositions(cleanTeamB, format);
       const initial: FieldPositions = {};
       [...defaultsA, ...defaultsB].forEach(({ player, x, y }) => {
         initial[player.id] = { x, y };
