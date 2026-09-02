@@ -277,14 +277,13 @@ function DraggablePlayer({
           </span>
         )}
       </div>
-      {!compact && (
-        <span
-          className="mt-1 max-w-[80px] truncate text-center font-bold select-none drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)]"
-          style={{ fontSize: nameFontSize, color: '#fff' }}
-        >
-          {player.nickname}
-        </span>
-      )}
+      <span
+        className="mt-1 max-w-[72px] truncate text-center font-bold select-none drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)]"
+        style={{ fontSize: compact ? '8px' : nameFontSize, color: '#fff', lineHeight: '1' }}
+        title={`${player.nickname} #${player.number} · ${player.position}`}
+      >
+        {player.nickname}
+      </span>
     </div>
   );
 }
