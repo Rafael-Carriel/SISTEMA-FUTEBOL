@@ -190,11 +190,9 @@ function PitchHalf({ teamName, teamColor, players, w, h, compact, flip, format }
                   {player.number}
                 </span>
               </div>
-              {!compact && (
-                <span className="mt-0.5 max-w-[60px] truncate text-center text-[9px] font-bold text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]">
-                  {player.nickname}
-                </span>
-              )}
+              <span className="mt-1 max-w-[72px] truncate text-center font-bold text-white drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)]" style={{ fontSize: compact ? '8px' : '9px', lineHeight: '1' }} title={`${player.nickname} #${player.number}`}>
+                {player.nickname}
+              </span>
             </div>
           );
         })}
