@@ -931,9 +931,9 @@ export function FutApp() {
 
       {/* Match dialog (with balance preview + format selector + drag positions) */}
       <Dialog open={dialog === 'match'} onOpenChange={(open) => { if (!open) { setDialog(null); setPreviewTeams(null); setDragPositions({}); setEditingMatchId(null); } }}>
-        <DialogContent className="flex flex-col max-h-[88vh] sm:max-w-2xl">
-          <DialogHeader><DialogTitle>{editingMatchId ? 'Editar partida' : 'Nova partida'}</DialogTitle><DialogDescription>{editingMatchId ? 'Ajuste os detalhes e a escalação da partida.' : 'Selecione o formato e os confirmados; o sorteio inteligente equilibra por atributos.'}</DialogDescription></DialogHeader>
-          <div className="flex-1 overflow-y-auto grid gap-4 sm:grid-cols-2 pb-6">
+        <DialogContent className="flex flex-col max-h-[90vh] sm:max-w-2xl gap-0 p-0 overflow-hidden">
+          <DialogHeader className="shrink-0 px-6 pt-6 pb-2"><DialogTitle>{editingMatchId ? 'Editar partida' : 'Nova partida'}</DialogTitle><DialogDescription>{editingMatchId ? 'Ajuste os detalhes e a escalação da partida.' : 'Selecione o formato e os confirmados; o sorteio inteligente equilibra por atributos.'}</DialogDescription></DialogHeader>
+          <div className="flex-1 overflow-y-auto grid gap-4 sm:grid-cols-2 px-6 pb-6 pt-2">
             <label className="form-label sm:col-span-2">Nome<Input value={matchForm.title} onChange={(e) => setMatchForm({ ...matchForm, title: e.target.value })} className="form-control" /></label>
             <label className="form-label sm:col-span-2">Local<Input value={matchForm.venue} onChange={(e) => setMatchForm({ ...matchForm, venue: e.target.value })} className="form-control" /></label>
             <label className="form-label">Data<Input type="date" value={matchForm.date} onChange={(e) => setMatchForm({ ...matchForm, date: e.target.value })} className="form-control" /></label>
@@ -972,45 +972,45 @@ export function FutApp() {
               <p className="form-label mb-2">Escalação · {matchForm.selected.length} confirmados</p>
               <div className="roster max-h-48 overflow-y-auto pr-1 grid grid-cols-2 sm:grid-cols-3 gap-2">{players.map((player) => { const checked = matchForm.selected.includes(player.id); return <button key={player.id} onClick={() => { setPreviewTeams(null); setMatchForm((form) => ({ ...form, selected: checked ? form.selected.filter((id) => id !== player.id) : [...form.selected, player.id] })); }} className={checked ? 'checked' : ''}><i>{checked && <Check />}</i><PlayerAvatar player={player} size="sm" /><b>{player.nickname}</b><small>{calcOverall(player)}</small></button>; })}</div>
             </div>
-          </div>
 
-          {/* Balance preview with draggable pitch */}
-          <div className="sm:col-span-2">
-            {!previewTeams ? (
-              <Button variant="outline" onClick={previewDraft} className="w-full h-11 mt-2"><Swords /> Visualizar sorteio</Button>
-            ) : (
-              <div className="mt-3 rounded-2xl border border-border bg-muted/50 p-4">
-                <div className="flex items-center justify-between mb-3">
-                  <p className="text-xs font-extrabold uppercase tracking-wider text-muted-foreground">Preview do sorteio</p>
-                  <button onClick={() => { setPreviewTeams(null); setDragPositions({}); }} className="text-xs font-bold text-muted-foreground hover:text-foreground"><X className="inline size-3" /> Limpar</button>
-                </div>
-                <DraggablePitch
-                  teamA={previewTeamAPlayers}
-                  teamB={previewTeamBPlayers}
-                  teamAName="Time Verde"
-                  teamBName="Time Branco"
-                  compact
-                  format={matchForm.format}
-                  editable
-                  fieldPositions={dragPositions}
-                  onPositionsChange={setDragPositions}
-                />
-                {previewBalance && (
-                  <div className="mt-3 text-center">
-                    <div className="mx-auto mb-1 h-2 w-full max-w-[200px] overflow-hidden rounded-full bg-border">
-                      <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${previewBalance.percentage}%` }} />
-                    </div>
-                    <p className={`text-xs font-extrabold ${previewBalance.color}`}>{previewBalance.percentage}% — {previewBalance.label}</p>
+            {/* Balance preview with draggable pitch - DENTRO do scroll */}
+            <div className="sm:col-span-2">
+              {!previewTeams ? (
+                <Button variant="outline" onClick={previewDraft} className="w-full h-11 mt-2"><Swords /> Visualizar sorteio</Button>
+              ) : (
+                <div className="rounded-2xl border border-border bg-muted/50 p-3 sm:p-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <p className="text-xs font-extrabold uppercase tracking-wider text-muted-foreground">Preview do sorteio</p>
+                    <button onClick={() => { setPreviewTeams(null); setDragPositions({}); }} className="text-xs font-bold text-muted-foreground hover:text-foreground"><X className="inline size-3" /> Limpar</button>
                   </div>
-                )}
-                <p className="mt-2 text-center text-[10px] font-bold text-muted-foreground">
-                  Arraste os jogadores para ajustar a posição
-                </p>
-              </div>
-            )}
+                  <DraggablePitch
+                    teamA={previewTeamAPlayers}
+                    teamB={previewTeamBPlayers}
+                    teamAName="Time Verde"
+                    teamBName="Time Branco"
+                    compact
+                    format={matchForm.format}
+                    editable
+                    fieldPositions={dragPositions}
+                    onPositionsChange={setDragPositions}
+                  />
+                  {previewBalance && (
+                    <div className="mt-3 text-center">
+                      <div className="mx-auto mb-1 h-2 w-full max-w-[200px] overflow-hidden rounded-full bg-border">
+                        <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${previewBalance.percentage}%` }} />
+                      </div>
+                      <p className={`text-xs font-extrabold ${previewBalance.color}`}>{previewBalance.percentage}% — {previewBalance.label}</p>
+                    </div>
+                  )}
+                  <p className="mt-2 text-center text-[10px] font-bold text-muted-foreground">
+                    Arraste os jogadores para ajustar a posição
+                  </p>
+                </div>
+              )}
+            </div>
           </div>
 
-          <DialogFooter className="sticky bottom-0 bg-background/95 backdrop-blur-sm border-t mt-auto">
+          <DialogFooter className="shrink-0 border-t bg-background px-6 py-4">
             <Button variant="outline" onClick={() => { setDialog(null); setPreviewTeams(null); setDragPositions({}); setEditingMatchId(null); }}>Cancelar</Button>
             <Button onClick={saveMatch}><Swords /> {editingMatchId ? 'Salvar alterações' : 'Montar times'}</Button>
           </DialogFooter>
