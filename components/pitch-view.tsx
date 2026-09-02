@@ -118,9 +118,9 @@ function assignPositions(players: Player[], format: MatchFormat): Array<{ player
 /* ─── SVG field markings ─── */
 function FieldLines({ w, h, flip, format }: { w: number; h: number; flip: boolean; format: MatchFormat }) {
   const half = h / 2;
-  const goalY = flip ? h - h * 0.18 : 0;
-  const goalSmallY = flip ? h - h * 0.06 : 0;
-  const penSpotY = flip ? h - h * 0.11 : h * 0.11;
+  const goalY = flip ? 0 : h - h * 0.18;
+  const goalSmallY = flip ? 0 : h - h * 0.06;
+  const penSpotY = flip ? h * 0.11 : h - h * 0.11;
 
   // Adjust dimensions based on format
   const penaltyWidth = format === 'F5' ? w * 0.9 : format === 'F7' ? w * 0.8 : w * 0.75;
@@ -256,7 +256,7 @@ export function PitchView({
   return (
     <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
       <PitchHalf teamName={teamAName} teamColor={teamAColor} players={placedA} w={w} h={h} compact={compact} flip={false} format={format} />
-      <PitchHalf teamName={teamBName} teamColor={teamBColor} players={placedB} w={w} h={h} compact={compact} flip={true} format={format} />
+      <PitchHalf teamName={teamBName} teamColor={teamBColor} players={placedB} w={w} h={h} compact={compact} flip={false} format={format} />
     </div>
   );
 }

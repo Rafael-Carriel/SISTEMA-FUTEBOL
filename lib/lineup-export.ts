@@ -276,7 +276,7 @@ export async function exportLineup(
 
   // Draw teams
   drawTeam(ctx, placedA, fieldAX, fieldY, fieldW, fieldH, '#16a34a', false);
-  drawTeam(ctx, placedB, fieldBX, fieldY, fieldW, fieldH, '#3b82f6', true);
+  drawTeam(ctx, placedB, fieldBX, fieldY, fieldW, fieldH, '#3b82f6', false);
 
   // Team labels
   ctx.textAlign = 'center';

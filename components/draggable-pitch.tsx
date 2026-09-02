@@ -83,9 +83,12 @@ function FieldLines({
   format,
 }: { w: number; h: number; flip: boolean; format: MatchFormat }) {
   const half = h / 2;
-  const goalY = flip ? h - h * 0.15 : 0;
-  const goalSmallY = flip ? h - h * 0.05 : 0;
-  const penSpotY = flip ? h - h * 0.1 : h * 0.1;
+  // `flip=false` means the team attacks upwards, with its own goal at the bottom.
+  // Keeping player coordinates and markings under the same rule prevents the
+  // second formation from appearing upside down.
+  const goalY = flip ? 0 : h - h * 0.15;
+  const goalSmallY = flip ? 0 : h - h * 0.05;
+  const penSpotY = flip ? h * 0.1 : h - h * 0.1;
 
   // Adjust dimensions based on format
   const penaltyWidth = format === 'F5' ? w * 0.9 : format === 'F7' ? w * 0.8 : w * 0.75;
@@ -492,7 +495,7 @@ export function DraggablePitch({
         w={w}
         h={h}
         compact={compact}
-        flip={true}
+        flip={false}
         format={format}
         editable={editable}
         onDragEnd={handleDragEnd}

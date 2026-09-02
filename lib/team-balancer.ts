@@ -39,48 +39,40 @@ export function balancedTeamsSmart(ids: string[], playerById: (id: string) => Pl
     return { teamA: players.slice(0, half).map((p) => p.id), teamB: players.slice(half).map((p) => p.id) };
   }
 
-  // Sort by overall descending
-  const ordered = [...players].sort((a, b) => overall(b) - overall(a));
-
   const teamA: Player[] = [];
   const teamB: Player[] = [];
   let powerA = 0;
   let powerB = 0;
 
-  // Snake draft: A, B, B, A, A, B, B, A...
-  ordered.forEach((player, i) => {
-    const pattern = Math.floor(i / 2) % 2; // 0,0,1,1,2,2...
-    const pickA = i % 2 === 0 ? pattern === 0 : pattern === 1;
+  const maxA = Math.ceil(players.length / 2);
+  const maxB = Math.floor(players.length / 2);
+  const positions = ['GOL', 'ZAG', 'MEI', 'ATA'] as const;
+  const weightedPower = (player: Player) =>
+    overall(player) + 0.3 * player.pace + 0.2 * player.defending + 0.15 * player.shooting;
 
-    if (pickA || teamB.length > teamA.length) {
-      teamA.push(player);
-      powerA += overall(player) + 0.3 * player.pace + 0.2 * player.defending + 0.15 * player.shooting;
-    } else {
-      teamB.push(player);
-      powerB += overall(player) + 0.3 * player.pace + 0.2 * player.defending + 0.15 * player.shooting;
-    }
-  });
+  // Distribute one position at a time. This keeps both teams with the closest
+  // possible number of goalkeepers, defenders, midfielders and attackers.
+  for (const position of positions) {
+    const group = players
+      .filter((player) => player.position === position)
+      .sort((a, b) => overall(b) - overall(a));
 
-  // Fine-tune: if power difference > 5%, try swapping last players
-  const totalPower = powerA + powerB;
-  if (totalPower > 0) {
-    const diff = Math.abs(powerA - powerB) / totalPower;
-    if (diff > 0.05 && teamA.length > 1 && teamB.length > 1) {
-      const lastA = teamA[teamA.length - 1];
-      const lastB = teamB[teamB.length - 1];
-      const ovrA = overall(lastA) + 0.3 * lastA.pace + 0.2 * lastA.defending;
-      const ovrB = overall(lastB) + 0.3 * lastB.pace + 0.2 * lastB.defending;
+    for (const player of group) {
+      const countA = teamA.filter((member) => member.position === position).length;
+      const countB = teamB.filter((member) => member.position === position).length;
+      const canJoinA = teamA.length < maxA;
+      const canJoinB = teamB.length < maxB;
+      const joinA = !canJoinB || (canJoinA && (
+        countA < countB || (countA === countB && powerA <= powerB)
+      ));
+      const power = weightedPower(player);
 
-      if (powerA > powerB && ovrA > ovrB) {
-        teamA.pop();
-        teamB.pop();
-        teamA.push(lastB);
-        teamB.push(lastA);
-      } else if (powerB > powerA && ovrB > ovrA) {
-        teamA.pop();
-        teamB.pop();
-        teamA.push(lastB);
-        teamB.push(lastA);
+      if (joinA) {
+        teamA.push(player);
+        powerA += power;
+      } else {
+        teamB.push(player);
+        powerB += power;
       }
     }
   }
