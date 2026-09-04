@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo } from 'react';
+import { Activity, Radio, Sparkles } from 'lucide-react';
 import type { MatchFormat, Player } from '@/lib/fut-types';
 import { assignFormationPositions } from '@/lib/formation-layout';
 
@@ -74,21 +75,30 @@ interface PitchHalfProps {
 }
 
 function PitchHalf({ teamName, teamColor, players, w, h, compact, flip, format, goalkeeperId }: PitchHalfProps) {
+  const teamOverall = players.length
+    ? Math.round(players.reduce((sum, item) => sum + Math.round((item.player.pace + item.player.shooting + item.player.passing + item.player.defending + item.player.physical) / 5), 0) / players.length)
+    : 0;
   return (
-    <div className="flex flex-col items-center gap-2 w-full max-w-[280px]">
-      <h4 className="text-xs font-black uppercase tracking-wider w-full" style={{ color: teamColor }}>
-        {teamName}
-      </h4>
+    <div className="premium-lineup-card lineup-team flex w-full max-w-[300px] flex-col gap-3" style={{ '--team-color': teamColor } as React.CSSProperties}>
+      <div className="premium-team-header flex w-full items-center gap-2">
+        <span className="size-2.5 rounded-full shadow-[0_0_14px_currentColor]" style={{ color: teamColor, background: teamColor }} />
+        <div className="min-w-0 flex-1"><h4 className="truncate text-xs font-black uppercase tracking-wider" style={{ color: teamColor }}>{teamName}</h4><p className="text-[9px] font-bold text-white/40">{players.length} titulares · {format}</p></div>
+        <span className="team-power"><Activity className="size-3" /> {teamOverall}</span>
+      </div>
+      <div className="pitch-stage">
       <div
-        className="relative overflow-hidden w-full"
+        className="stadium-pitch relative overflow-hidden w-full"
         style={{
           aspectRatio: `${w} / ${h}`,
-          background: 'linear-gradient(180deg, var(--pitch-1) 0%, var(--pitch-2) 100%)',
+          background: 'repeating-linear-gradient(90deg, rgba(255,255,255,.028) 0, rgba(255,255,255,.028) 12.5%, transparent 12.5%, transparent 25%), linear-gradient(180deg, #18824a 0%, #07512f 52%, #043b24 100%)',
           borderRadius: 14,
           border: `3px solid ${teamColor}`,
-          boxShadow: `0 0 0 1px ${teamColor}30, 0 8px 32px rgba(0,0,0,0.25)`,
+          boxShadow: `0 0 0 1px ${teamColor}55, 0 0 32px ${teamColor}18, inset 0 0 70px rgba(0,0,0,.28), 0 28px 55px rgba(0,0,0,.42)`,
         }}
       >
+        <div className="pitch-light pitch-light-left" />
+        <div className="pitch-light pitch-light-right" />
+        <div className="pitch-scan" />
         <FieldLines w={w} h={h} flip={flip} format={format} />
 
         {players.map(({ player, x, y }) => {
@@ -98,13 +108,13 @@ function PitchHalf({ teamName, teamColor, players, w, h, compact, flip, format, 
           return (
             <div
               key={player.id}
-              className="pointer-events-none absolute flex flex-col items-center"
-              style={{ left: `${px}%`, top: `${py}%`, transform: 'translate(-50%,-50%)', zIndex: 10 }}
+              className="lineup-player premium-player pointer-events-none absolute flex flex-col items-center"
+              style={{ left: `${px}%`, top: `${py}%`, transform: 'translate(-50%,-50%)', zIndex: 10, '--team-color': teamColor } as React.CSSProperties}
             >
-              <div className="relative" style={{ filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.4))' }}>
+              <div className="player-orbit relative">
                 <span
                   className="relative grid size-9 place-items-center overflow-hidden rounded-full border-2 text-[9px] font-black"
-                  style={{ background: teamColor, borderColor: '#fff', color: '#fff' }}
+                  style={{ background: teamColor, borderColor: '#fff', color: '#fff', boxShadow: `0 0 0 4px ${teamColor}25, 0 10px 24px rgba(0,0,0,.48), inset 0 1px 0 rgba(255,255,255,.45)` }}
                 >
                   {player.photoUrl ? (
                     <img src={player.photoUrl} alt="" className="h-full w-full object-cover" />
@@ -131,6 +141,8 @@ function PitchHalf({ teamName, teamColor, players, w, h, compact, flip, format, 
           );
         })}
       </div>
+      </div>
+      <div className="premium-team-footer"><span><Sparkles className="size-3" /> Formação titular</span><b><Radio className="size-3" /> Em campo</b></div>
     </div>
   );
 }
@@ -178,7 +190,7 @@ export function PitchView({
   const { w, h } = getDimensions();
 
   return (
-    <div className="flex w-full flex-col justify-center gap-3 sm:flex-row sm:gap-4">
+    <div className="premium-lineup-shell flex w-full flex-col justify-center gap-6 p-3 sm:flex-row sm:p-5">
       <PitchHalf teamName={teamAName} teamColor={teamAColor} players={placedA} w={w} h={h} compact={compact} flip={false} format={format} goalkeeperId={goalkeeperAId} />
       <PitchHalf teamName={teamBName} teamColor={teamBColor} players={placedB} w={w} h={h} compact={compact} flip={false} format={format} goalkeeperId={goalkeeperBId} />
     </div>

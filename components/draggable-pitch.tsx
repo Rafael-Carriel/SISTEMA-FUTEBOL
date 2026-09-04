@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { GripVertical, MousePointer2 } from 'lucide-react';
+import { Activity, GripVertical, MousePointer2, Sparkles } from 'lucide-react';
 import type { Player, MatchFormat, FieldPositions } from '@/lib/fut-types';
 import { assignFormationPositions } from '@/lib/formation-layout';
 
@@ -203,7 +203,7 @@ function DraggablePlayer({
   return (
     <div
       ref={playerRef}
-      className="lineup-player absolute flex flex-col items-center transition-transform duration-150"
+      className={`lineup-player premium-player absolute flex flex-col items-center transition-transform duration-150 ${isDragging ? 'is-dragging' : ''}`}
       style={{
         left: `${displayX}%`,
         top: `${displayY}%`,
@@ -219,7 +219,7 @@ function DraggablePlayer({
       onPointerLeave={handlePointerUp}
       onPointerCancel={handlePointerUp}
     >
-      <div className="relative" style={{ filter: 'drop-shadow(0 3px 6px rgba(0,0,0,0.5))' }}>
+      <div className="player-orbit relative" style={{ '--team-color': teamColor } as React.CSSProperties}>
         <span
           className="relative grid place-items-center overflow-hidden rounded-full border-2 font-black select-none"
           style={{
@@ -229,7 +229,7 @@ function DraggablePlayer({
             background: teamColor,
             borderColor: '#fff',
             color: '#fff',
-            boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
+            boxShadow: `0 0 0 4px ${teamColor}25, 0 10px 24px rgba(0,0,0,.48), inset 0 1px 0 rgba(255,255,255,.45)`,
           }}
         >
           {player.photoUrl ? (
@@ -298,30 +298,30 @@ function PitchHalf({
     ? Math.round(players.reduce((sum, item) => sum + Math.round((item.player.pace + item.player.shooting + item.player.passing + item.player.defending + item.player.physical) / 5), 0) / players.length)
     : 0;
   return (
-    <div className="lineup-team flex w-full flex-col gap-3">
-      <div className="flex w-full items-center gap-2 rounded-xl border border-border bg-card px-3 py-2 shadow-sm">
+    <div className="lineup-team premium-lineup-card flex w-full flex-col gap-3" style={{ '--team-color': teamColor } as React.CSSProperties}>
+      <div className="premium-team-header flex w-full items-center gap-2">
         <span className="size-2.5 rounded-full shadow-[0_0_12px_currentColor]" style={{ color: teamColor, background: teamColor }} />
         <div className="min-w-0 flex-1">
           <h4 className="truncate text-xs font-black uppercase tracking-wider" style={{ color: teamColor }}>{teamName}</h4>
           <p className="text-[10px] font-bold text-muted-foreground">{players.length} jogadores · média {teamOverall}</p>
         </div>
-        {editable && (
-          <span className="flex items-center gap-1 rounded-full bg-primary/10 px-2 py-1 text-[9px] font-extrabold text-primary">
-            <MousePointer2 className="size-3" />
-            Arraste
-          </span>
-        )}
+        <span className="team-power"><Activity className="size-3" /> {teamOverall}</span>
+        {editable && <span className="premium-drag-chip"><MousePointer2 className="size-3" /> Arraste</span>}
       </div>
+      <div className="pitch-stage">
       <div
-        className="relative overflow-hidden w-full"
+        className="stadium-pitch relative overflow-hidden w-full"
         style={{
           aspectRatio: `${w} / ${h}`,
-          background: 'repeating-linear-gradient(90deg, rgba(255,255,255,.025) 0, rgba(255,255,255,.025) 12.5%, transparent 12.5%, transparent 25%), linear-gradient(180deg, var(--pitch-1) 0%, var(--pitch-2) 100%)',
+          background: 'repeating-linear-gradient(90deg, rgba(255,255,255,.028) 0, rgba(255,255,255,.028) 12.5%, transparent 12.5%, transparent 25%), linear-gradient(180deg, #18824a 0%, #07512f 52%, #043b24 100%)',
           borderRadius: 18,
           border: `3px solid ${teamColor}`,
-          boxShadow: `0 0 0 1px ${teamColor}30, inset 0 0 60px rgba(0,0,0,.18), 0 14px 36px rgba(0,0,0,0.22)`,
+          boxShadow: `0 0 0 1px ${teamColor}55, 0 0 32px ${teamColor}18, inset 0 0 70px rgba(0,0,0,.28), 0 28px 55px rgba(0,0,0,.42)`,
         }}
       >
+        <div className="pitch-light pitch-light-left" />
+        <div className="pitch-light pitch-light-right" />
+        <div className="pitch-scan" />
         <FieldLines w={w} h={h} flip={flip} format={format} />
 
         {players.map(({ player, x, y }, index) => (
@@ -341,6 +341,8 @@ function PitchHalf({
           />
         ))}
       </div>
+      </div>
+      <div className="premium-team-footer"><span><Sparkles className="size-3" /> Formação inteligente</span><b>{format.replace('F', '')} em campo</b></div>
     </div>
   );
 }
@@ -429,7 +431,7 @@ export function DraggablePitch({
   const { w, h } = getDimensions();
 
   return (
-    <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+    <div className="premium-lineup-shell grid grid-cols-1 gap-6 p-3 md:grid-cols-2 md:p-5">
       <PitchHalf
         teamName={teamAName}
         teamColor={teamAColor}

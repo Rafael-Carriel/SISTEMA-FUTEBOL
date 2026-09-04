@@ -91,7 +91,11 @@ function calculateStats(players: Player[], matches: Match[]): PlayerStats[] {
 /* ─── shared UI components ─── */
 function PlayerAvatar({ player, size = 'md' }: { player?: Player; size?: 'sm' | 'md' | 'lg' | 'xl' }) {
   const sizes = { sm: 'size-8 text-[9px]', md: 'size-11 text-xs', lg: 'size-14 text-sm', xl: 'size-24 text-2xl' };
-  return <span className={`relative grid shrink-0 place-items-center overflow-hidden rounded-2xl bg-primary font-black text-primary-foreground antialiased ${sizes[size]}`}>{player?.photoUrl ? <img src={player.photoUrl} alt="" className="h-full w-full object-cover" /> : initials(player)}</span>;
+  return (
+    <span className={`relative grid shrink-0 place-items-center overflow-hidden rounded-2xl bg-primary font-black text-primary-foreground antialiased ${sizes[size]}`}>
+      {player?.photoUrl ? <img src={player.photoUrl} alt="" className="h-full w-full object-cover" /> : initials(player)}
+    </span>
+  );
 }
 function StatPill({ value, label }: { value: number; label: string }) { return <div className="rounded-2xl bg-muted p-3"><p className="text-xl font-black tabular-nums">{value}</p><p className="stat-label">{label}</p></div>; }
 function Metric({ icon: Icon, label, value }: { icon: typeof Users; label: string; value: string }) { return <div className="metric-card"><Icon /><div><p>{label}</p><strong>{value}</strong></div></div>; }
@@ -390,6 +394,23 @@ export function FutApp() {
     try { await updateDoc(doc(db, 'players', player.id), { [field]: rating }); } catch { /* offline: local state already updated */ }
   }
 
+  async function setOverall(player: Player, targetOverall: number) {
+    const clamped = Math.max(1, Math.min(99, targetOverall));
+    const fields = ['pace', 'shooting', 'passing', 'defending', 'physical'] as const;
+    const current = fields.map((f) => player[f]);
+    const currentAvg = current.reduce((s, v) => s + v, 0) / 5;
+    const scale = currentAvg === 0 ? clamped / 50 : clamped / currentAvg;
+    const updated: Record<string, number> = {};
+    fields.forEach((f, i) => { updated[f] = Math.max(1, Math.min(99, Math.round(current[i] * scale))); });
+    const newAvg = fields.reduce((s, f) => s + updated[f], 0) / 5;
+    if (Math.round(newAvg) !== clamped) {
+      const biggest = fields.reduce((a, b) => updated[a] >= updated[b] ? a : b);
+      updated[biggest] = Math.max(1, Math.min(99, updated[biggest] + (clamped - Math.round(newAvg))));
+    }
+    setPlayers((all) => all.map((item) => (item.id === player.id ? { ...item, ...updated } : item)));
+    try { await updateDoc(doc(db, 'players', player.id), updated); } catch { /* offline */ }
+  }
+
   async function changeMatchStatus(match: Match, status: Match['status']) {
     const update: Partial<Match> = { status };
     if (status === 'live') update.startedAt = new Date().toISOString();
@@ -473,76 +494,84 @@ export function FutApp() {
     const selected = stats.find((item) => item.player.id === artPlayerId) || stats[0];
     if (!selected) return;
 
-    const labels = {
-      artilheiro: ['ARTILHEIRO DO MÊS', `${selected.goals} GOLS`],
-      assistente: ['GARÇOM DO MÊS', `${selected.assists} ASSISTÊNCIAS`],
-      paredao: ['PAREDÃO DO MÊS', `${selected.saves} DEFESAS`],
-      craque: ['CRAQUE DO MÊS', `OVERALL ${selected.overall}`],
-    } as const;
-    const [headline, result] = labels[artType];
     const canvas = document.createElement('canvas');
-    canvas.width = 1080;
-    canvas.height = 1350;
+    canvas.width = 600;
+    canvas.height = 840;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    // Background gradient
-    const gradient = ctx.createLinearGradient(0, 0, 1080, 1350);
-    gradient.addColorStop(0, '#07100b');
-    gradient.addColorStop(1, '#14271a');
-    ctx.fillStyle = gradient;
-    ctx.fillRect(0, 0, 1080, 1350);
+    const cx = 300;
+    const cardTop = 20;
+    const cardW = 540;
+    const cardH = 800;
+    const cornerR = 30;
+    const bottomTip = cardTop + cardH;
 
-    // Green triangle accent
-    ctx.fillStyle = '#baff55';
-    ctx.beginPath();
-    ctx.moveTo(0, 0);
-    ctx.lineTo(440, 0);
-    ctx.lineTo(0, 410);
-    ctx.closePath();
+    function drawCardShape() {
+      ctx.beginPath();
+      ctx.moveTo(cx - cardW / 2 + cornerR, cardTop);
+      ctx.lineTo(cx + cardW / 2 - cornerR, cardTop);
+      ctx.arcTo(cx + cardW / 2, cardTop, cx + cardW / 2, cardTop + cornerR, cornerR);
+      ctx.lineTo(cx + cardW / 2, cardTop + 260);
+      ctx.quadraticCurveTo(cx + cardW / 2, cardTop + 320, cx + cardW / 2 - 40, cardTop + 360);
+      ctx.lineTo(cx + 30, bottomTip - 20);
+      ctx.quadraticCurveTo(cx, bottomTip, cx - 30, bottomTip - 20);
+      ctx.lineTo(cx - cardW / 2 + 40, cardTop + 360);
+      ctx.quadraticCurveTo(cx - cardW / 2, cardTop + 320, cx - cardW / 2, cardTop + 260);
+      ctx.lineTo(cx - cardW / 2, cardTop + cornerR);
+      ctx.arcTo(cx - cardW / 2, cardTop, cx - cardW / 2 + cornerR, cardTop, cornerR);
+      ctx.closePath();
+    }
+
+    drawCardShape();
+    const cardGrad = ctx.createLinearGradient(cx - 200, cardTop, cx + 200, bottomTip);
+    cardGrad.addColorStop(0, '#d4a843');
+    cardGrad.addColorStop(0.3, '#f0d68a');
+    cardGrad.addColorStop(0.5, '#c9982e');
+    cardGrad.addColorStop(0.7, '#f0d68a');
+    cardGrad.addColorStop(1, '#8b6914');
+    ctx.fillStyle = cardGrad;
     ctx.fill();
 
-    // Text
-    ctx.fillStyle = '#baff55';
-    ctx.font = '900 40px Arial';
-    ctx.fillText('NA TRAVE', 70, 82);
+    drawCardShape();
+    ctx.strokeStyle = '#f5e6a3';
+    ctx.lineWidth = 4;
+    ctx.stroke();
 
-    ctx.fillStyle = '#fff';
-    ctx.font = '900 70px Arial';
-    ctx.fillText(headline, 70, 610);
-
-    ctx.fillStyle = '#baff55';
-    ctx.font = '900 118px Arial';
-    ctx.fillText(selected.player.nickname.toUpperCase(), 70, 755);
-
-    ctx.fillStyle = '#fff';
-    ctx.font = '900 70px Arial';
-    ctx.fillText(result, 70, 860);
-
-    ctx.fillStyle = 'rgba(255,255,255,.65)';
-    ctx.font = '700 30px Arial';
-    ctx.fillText('FUT DAS QUINTAS  ·  SETEMBRO 2026', 70, 1260);
-
-    // Border
-    ctx.strokeStyle = '#baff55';
-    ctx.lineWidth = 8;
-    ctx.strokeRect(32, 32, 1016, 1286);
-
-    // Photo circle background
-    ctx.fillStyle = '#243829';
+    const innerMargin = 40;
+    const innerTop = cardTop + 18;
+    ctx.save();
     ctx.beginPath();
-    ctx.arc(810, 310, 205, 0, Math.PI * 2);
+    ctx.rect(cx - cardW / 2 + innerMargin, innerTop, cardW - innerMargin * 2, 240);
+    ctx.clip();
+    ctx.fillStyle = '#1a1a2e';
     ctx.fill();
+    ctx.restore();
 
-    // Use artPhotoUrl (device) or player's saved photo
+    ctx.fillStyle = '#1a1a2e';
+    ctx.fillRect(cx - cardW / 2 + innerMargin, innerTop + 230, cardW - innerMargin * 2, 8);
+
+    ctx.fillStyle = '#fff';
+    ctx.font = '900 72px Arial';
+    ctx.textAlign = 'left';
+    ctx.fillText(String(selected.overall), cx - cardW / 2 + innerMargin + 8, innerTop + 190);
+
+    ctx.fillStyle = 'rgba(255,255,255,.8)';
+    ctx.font = '800 28px Arial';
+    ctx.fillText(selected.player.position, cx - cardW / 2 + innerMargin + 8, innerTop + 220);
+
     const photoSrc = artPhotoUrl || selected.player.photoUrl;
-    const fallbackInitials = () => {
+    const photoCX = cx + 60;
+    const photoCY = innerTop + 130;
+    const photoR = 100;
+
+    const drawInitials = () => {
       ctx.fillStyle = '#baff55';
-      ctx.font = '900 118px Arial';
+      ctx.font = '900 72px Arial';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText(initials(selected.player), 810, 310);
-      ctx.textAlign = 'start';
+      ctx.fillText(initials(selected.player), photoCX, photoCY);
+      ctx.textAlign = 'left';
       ctx.textBaseline = 'alphabetic';
     };
 
@@ -552,30 +581,81 @@ export function FutApp() {
         image.onload = () => {
           ctx.save();
           ctx.beginPath();
-          ctx.arc(810, 310, 190, 0, Math.PI * 2);
+          ctx.arc(photoCX, photoCY, photoR, 0, Math.PI * 2);
           ctx.clip();
-          // Cover crop: center the image in the circle
-          const size = 380;
+          const size = photoR * 2;
           const imgAspect = image.width / image.height;
           let sx = 0, sy = 0, sw = image.width, sh = image.height;
           if (imgAspect > 1) { sx = (image.width - image.height) / 2; sw = image.height; }
           else { sy = (image.height - image.width) / 2; sh = image.width; }
-          ctx.drawImage(image, sx, sy, sw, sh, 620, 120, size, size);
+          ctx.drawImage(image, sx, sy, sw, sh, photoCX - photoR, photoCY - photoR, size, size);
           ctx.restore();
           resolve();
         };
-        image.onerror = () => { fallbackInitials(); resolve(); };
+        image.onerror = () => { drawInitials(); resolve(); };
         image.src = photoSrc;
       });
     } else {
-      fallbackInitials();
+      drawInitials();
     }
 
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(photoCX, photoCY, photoR + 3, 0, Math.PI * 2);
+    ctx.strokeStyle = '#f5e6a3';
+    ctx.lineWidth = 4;
+    ctx.stroke();
+    ctx.restore();
+
+    const nameY = innerTop + 290;
+    ctx.fillStyle = '#1a1a2e';
+    ctx.font = '900 42px Arial';
+    ctx.textAlign = 'center';
+    ctx.fillText(selected.player.nickname.toUpperCase(), cx, nameY);
+
+    const statsY = nameY + 55;
+    const statSize = 30;
+    const statGap = 55;
+    const leftCol = cx - 160;
+    const rightCol = cx + 40;
+
+    ctx.textAlign = 'left';
+
+    const drawStat = (x: number, y: number, val: number, label: string) => {
+      ctx.fillStyle = '#1a1a2e';
+      ctx.font = '900 34px Arial';
+      ctx.fillText(String(val), x, y);
+      ctx.fillStyle = 'rgba(26,26,46,.65)';
+      ctx.font = '700 22px Arial';
+      ctx.fillText(label, x + 50, y);
+    };
+
+    drawStat(leftCol, statsY, selected.player.pace, 'PAC');
+    drawStat(rightCol, statsY, selected.player.shooting, 'SHO');
+    drawStat(leftCol, statsY + statGap, selected.player.passing, 'PAS');
+    drawStat(rightCol, statsY + statGap, selected.player.physical, 'PHY');
+    drawStat(leftCol, statsY + statGap * 2, selected.player.defending, 'DEF');
+    drawStat(rightCol, statsY + statGap * 2, selected.overall, 'OVR');
+
+    const labels = {
+      artilheiro: 'ARTILHEIRO DO MÊS',
+      assistente: 'GARÇOM DO MÊS',
+      paredao: 'PAREDÃO DO MÊS',
+      craque: 'CRAQUE DO MÊS',
+    } as const;
+
+    const footerY = bottomTip - 40;
+    ctx.fillStyle = 'rgba(26,26,46,.7)';
+    ctx.font = '800 22px Arial';
+    ctx.textAlign = 'center';
+    ctx.fillText(`${labels[artType]}  ·  NA TRAVE`, cx, footerY);
+    ctx.textAlign = 'left';
+
     const link = document.createElement('a');
-    link.download = `${headline.toLowerCase().replaceAll(' ', '-')}-${selected.player.nickname.toLowerCase()}.png`;
+    link.download = `fifa-card-${selected.player.nickname.toLowerCase()}.png`;
     link.href = canvas.toDataURL('image/png');
     link.click();
-    showNotice('Arte baixada e pronta para o grupo.');
+    showNotice('Cartinha FIFA baixada!');
   }
 
   /* ═══════════════════════════════════════════
@@ -1189,7 +1269,41 @@ export function FutApp() {
   const artsView = () => <div className="grid gap-5 xl:grid-cols-[.78fr_1.22fr]"><section className="panel h-fit"><h3 className="text-lg font-black">Personalize a arte</h3><p className="mt-1 text-sm text-muted-foreground">Escolha o destaque e baixe em PNG.</p><label className="form-label mt-5">Tipo<select value={artType} onChange={(e) => setArtType(e.target.value as typeof artType)} className="form-control"><option value="artilheiro">Artilheiro do mês</option><option value="assistente">Maior assistente</option><option value="paredao">Paredão do mês</option><option value="craque">Craque do mês</option></select></label><label className="form-label mt-4">Jogador<select value={artPlayerId} onChange={(e) => { setArtPlayerId(e.target.value); setArtPhotoUrl(''); }} className="form-control">{players.map((player) => <option key={player.id} value={player.id}>{player.nickname}</option>)}</select></label>
     <div className="mt-4"><p className="form-label mb-2">Foto do dispositivo</p>{previewPhotoSrc ? <div className="flex items-center gap-3"><div className="size-14 overflow-hidden rounded-xl border-2 border-primary"><img src={previewPhotoSrc} alt="" className="h-full w-full object-cover" /></div><div className="flex-1"><p className="text-xs font-bold text-muted-foreground">Foto carregada</p><button onClick={() => setArtPhotoUrl('')} className="mt-1 text-xs font-bold text-red-500 hover:underline">Remover</button></div></div> : <label className="form-control flex items-center gap-2 cursor-pointer"><Camera className="size-4" />Escolher foto do dispositivo<input type="file" accept="image/*" className="hidden" onChange={(e) => handleArtPhoto(e.target.files?.[0])} /></label>}</div>
     <Button onClick={exportArt} className="mt-5 h-11 w-full"><ImageDown /> Baixar arte pronta</Button></section>
-    <div className="mx-auto w-full max-w-[620px]"><div className="art-preview"><div className="art-brand"><b>NA TRAVE</b><span>Setembro 2026</span></div><div className="art-avatar">{previewPhotoSrc ? <img src={previewPhotoSrc} alt="" /> : initials(artStats?.player)}</div><div className="art-copy"><p>{artLabel[0]}</p><h3>{artStats?.player.nickname.toUpperCase()}</h3><strong>{artLabel[1]}</strong></div><footer>Fut das quintas</footer></div></div></div>;
+    <div className="mx-auto w-full max-w-[340px]">
+      <div className="relative overflow-hidden rounded-[28px] bg-gradient-to-b from-[#d4a843] via-[#f0d68a] to-[#8b6914] p-[6px] shadow-2xl" style={{ aspectRatio: '5/7' }}>
+        <div className="relative h-full w-full overflow-hidden rounded-[24px]">
+          <div className="absolute inset-x-0 top-0 h-[44%] bg-[#1a1a2e]">
+            <div className="absolute left-5 bottom-3 z-10">
+              <span className="block text-[52px] font-black leading-none text-white">{artStats?.overall || 0}</span>
+              <span className="text-xs font-bold text-white/70">{artStats?.player.position}</span>
+            </div>
+            <div className="absolute right-4 top-1/2 -translate-y-1/2">
+              <div className="size-[120px] overflow-hidden rounded-full border-[3px] border-[#f5e6a3]">
+                {previewPhotoSrc
+                  ? <img src={previewPhotoSrc} alt="" className="h-full w-full object-cover" />
+                  : <div className="flex h-full w-full items-center justify-center bg-[#243829] text-4xl font-black text-[#baff55]">{initials(artStats?.player)}</div>
+                }
+              </div>
+            </div>
+          </div>
+          <div className="absolute inset-x-0 top-[44%] h-[6px] bg-[#f5e6a3]/30" />
+          <div className="absolute inset-x-0 top-[46%] flex flex-col items-center pt-3">
+            <h3 className="text-center text-[22px] font-black uppercase leading-tight text-[#1a1a2e]">{artStats?.player.nickname.toUpperCase()}</h3>
+            <div className="mt-2 grid w-full grid-cols-2 gap-x-4 gap-y-1 px-6">
+              <div className="flex justify-between"><span className="text-xs font-black text-[#1a1a2e]">{artStats?.player.pace}</span><span className="text-[10px] font-bold text-[#1a1a2e]/60">PAC</span></div>
+              <div className="flex justify-between"><span className="text-xs font-black text-[#1a1a2e]">{artStats?.player.shooting}</span><span className="text-[10px] font-bold text-[#1a1a2e]/60">SHO</span></div>
+              <div className="flex justify-between"><span className="text-xs font-black text-[#1a1a2e]">{artStats?.player.passing}</span><span className="text-[10px] font-bold text-[#1a1a2e]/60">PAS</span></div>
+              <div className="flex justify-between"><span className="text-xs font-black text-[#1a1a2e]">{artStats?.player.physical}</span><span className="text-[10px] font-bold text-[#1a1a2e]/60">PHY</span></div>
+              <div className="flex justify-between"><span className="text-xs font-black text-[#1a1a2e]">{artStats?.player.defending}</span><span className="text-[10px] font-bold text-[#1a1a2e]/60">DEF</span></div>
+              <div className="flex justify-between"><span className="text-xs font-black text-[#1a1a2e]">{artStats?.overall || 0}</span><span className="text-[10px] font-bold text-[#1a1a2e]/60">OVR</span></div>
+            </div>
+          </div>
+          <div className="absolute inset-x-0 bottom-3 text-center">
+            <span className="text-[10px] font-bold uppercase tracking-wide text-[#1a1a2e]/60">{artLabel[0]} · NA TRAVE</span>
+          </div>
+        </div>
+      </div>
+    </div></div>;
 
   /* ═══════════════════════════════════════════
      RENDER
@@ -1411,6 +1525,7 @@ export function FutApp() {
         <DialogContent className="sm:max-w-lg">{activePlayerStats && <>
           <DialogHeader><DialogTitle>Cartinha do jogador</DialogTitle><DialogDescription>Ajuste os atributos para montar o overall.</DialogDescription></DialogHeader>
           <div className="big-player-card"><PlayerAvatar player={activePlayerStats.player} size="xl" /><div><small>{activePlayerStats.player.position} · camisa {activePlayerStats.player.number}</small><h3>{activePlayerStats.player.nickname}</h3><p>{activePlayerStats.player.name}</p></div><strong>{activePlayerStats.overall}<small>OVERALL</small></strong></div>
+          <label className="rating"><span>Overall</span><input type="range" min="1" max="99" value={activePlayerStats.overall} onChange={(e) => setOverall(activePlayerStats.player, Number(e.target.value))} /><b>{activePlayerStats.overall}</b></label>
           <div className="space-y-3">{([['pace', 'Velocidade'], ['shooting', 'Finalização'], ['passing', 'Passe'], ['defending', 'Defesa'], ['physical', 'Físico']] as const).map(([field, label]) => <label key={field} className="rating"><span>{label}</span><input type="range" min="1" max="99" value={activePlayerStats.player[field]} onChange={(e) => updateRating(activePlayerStats.player, field, Number(e.target.value))} /><b>{activePlayerStats.player[field]}</b></label>)}</div>
           <DialogFooter><Button variant="outline" onClick={() => setDialog(null)}>Fechar</Button><Button onClick={() => { setArtPlayerId(activePlayerStats.player.id); setArtPhotoUrl(''); setDialog(null); setView('arts'); }}><Sparkles /> Criar arte</Button></DialogFooter>
         </>}</DialogContent>

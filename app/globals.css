@@ -377,6 +377,31 @@ body {
   .balance-chip svg { @apply size-3.5; }
   .lineup-team { min-width: 0; }
   .lineup-player { opacity: 0; animation: player-drop .46s cubic-bezier(.2,.9,.25,1.2) forwards; }
+  .premium-lineup-shell { @apply relative overflow-hidden rounded-[28px] border border-white/10 bg-[#07130d] shadow-[0_28px_80px_rgba(4,18,11,.32)]; isolation: isolate; }
+  .premium-lineup-shell::before { content: ''; @apply pointer-events-none absolute inset-0; background: radial-gradient(circle at 50% -10%, rgba(186,255,85,.15), transparent 38%), linear-gradient(120deg, rgba(255,255,255,.025), transparent 35%); z-index: -1; }
+  .premium-lineup-shell::after { content: ''; @apply pointer-events-none absolute inset-0 opacity-25; background-image: linear-gradient(rgba(255,255,255,.025) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.025) 1px, transparent 1px); background-size: 28px 28px; mask-image: linear-gradient(to bottom, black, transparent 55%); z-index: -1; }
+  .premium-lineup-card { @apply relative rounded-[22px] border border-white/10 bg-white/[.035] p-3 text-white backdrop-blur-md; box-shadow: inset 0 1px 0 rgba(255,255,255,.07), 0 16px 40px rgba(0,0,0,.18); }
+  .premium-team-header { @apply rounded-2xl border border-white/10 bg-black/20 px-3 py-2.5; box-shadow: inset 3px 0 0 var(--team-color); }
+  .team-power { @apply flex shrink-0 items-center gap-1 rounded-full border border-white/10 bg-white/[.07] px-2 py-1 text-[9px] font-black text-white/75; }
+  .premium-drag-chip { @apply flex shrink-0 items-center gap-1 rounded-full border border-primary/20 bg-primary/10 px-2 py-1 text-[9px] font-extrabold text-primary; }
+  .pitch-stage { perspective: 1100px; padding: 2px 3px 12px; }
+  .stadium-pitch { transform: rotateX(2.5deg); transform-origin: 50% 100%; transition: transform .45s cubic-bezier(.2,.8,.2,1), box-shadow .45s ease; }
+  .premium-lineup-card:hover .stadium-pitch { transform: rotateX(0deg) translateY(-2px); }
+  .stadium-pitch::before { content: ''; @apply pointer-events-none absolute inset-0; background: radial-gradient(ellipse at center, transparent 30%, rgba(0,0,0,.34) 100%), linear-gradient(110deg, rgba(255,255,255,.09), transparent 18%, transparent 72%, rgba(186,255,85,.04)); z-index: 1; }
+  .stadium-pitch::after { content: ''; @apply pointer-events-none absolute inset-x-[8%] bottom-0 h-[18%]; background: linear-gradient(to top, rgba(0,0,0,.35), transparent); filter: blur(10px); z-index: 1; }
+  .pitch-light { @apply pointer-events-none absolute -top-[10%] h-[65%] w-[46%] opacity-40; background: linear-gradient(to bottom, rgba(255,255,255,.3), transparent 72%); filter: blur(15px); clip-path: polygon(42% 0, 58% 0, 100% 100%, 0 100%); z-index: 2; animation: stadium-breathe 4s ease-in-out infinite; }
+  .pitch-light-left { left: -17%; transform: rotate(13deg); }
+  .pitch-light-right { right: -17%; transform: rotate(-13deg); animation-delay: -2s; }
+  .pitch-scan { @apply pointer-events-none absolute inset-y-0 -left-1/3 w-1/3; background: linear-gradient(90deg, transparent, rgba(255,255,255,.10), transparent); transform: skewX(-16deg); z-index: 3; animation: pitch-scan 5.5s ease-in-out infinite 1s; }
+  .premium-player { z-index: 5 !important; }
+  .premium-player .player-orbit { filter: drop-shadow(0 8px 9px rgba(0,0,0,.5)); transition: transform .22s ease, filter .22s ease; }
+  .premium-player .player-orbit::before { content: ''; @apply absolute -inset-2 rounded-full border opacity-50; border-color: color-mix(in srgb, var(--team-color) 55%, transparent); box-shadow: 0 0 14px color-mix(in srgb, var(--team-color) 35%, transparent); animation: player-orbit 2.8s ease-in-out infinite; }
+  .premium-player::after { content: ''; @apply absolute left-1/2 top-[42px] h-3 w-10 -translate-x-1/2 rounded-full bg-black/35 blur-[5px]; z-index: -1; }
+  .premium-player:hover .player-orbit, .premium-player.is-dragging .player-orbit { transform: translateY(-5px) scale(1.08); filter: drop-shadow(0 15px 12px rgba(0,0,0,.58)); }
+  .premium-player > span:last-child { @apply mt-1.5 rounded-md bg-black/65 px-1.5 py-1 backdrop-blur-sm; text-shadow: 0 1px 5px #000; }
+  .premium-team-footer { @apply flex items-center justify-between border-t border-white/10 px-1 pt-2 text-[8px] font-bold uppercase tracking-[.11em] text-white/35; }
+  .premium-team-footer span, .premium-team-footer b { @apply flex items-center gap-1; }
+  .premium-team-footer b { color: var(--team-color); }
 
   .art-preview { @apply relative aspect-[4/5] overflow-hidden rounded-[28px] bg-[#07100b] p-[7%] text-white shadow-2xl; }
   .art-preview::before { content: ''; @apply absolute -right-[18%] -top-[5%] size-[55%] rounded-full bg-primary/15 blur-3xl; }
@@ -412,10 +437,17 @@ body {
 @keyframes tactical-scan { from { left: -20%; } to { left: 110%; } }
 @keyframes draft-reveal { from { opacity: 0; transform: translateY(14px) scale(.985); } to { opacity: 1; transform: translateY(0) scale(1); } }
 @keyframes player-drop { from { opacity: 0; transform: translate(-50%, -64%) scale(.65); filter: blur(4px); } to { opacity: 1; transform: translate(-50%, -50%) scale(1); filter: blur(0); } }
+@keyframes stadium-breathe { 0%, 100% { opacity: .24; } 50% { opacity: .48; } }
+@keyframes pitch-scan { 0%, 18% { left: -38%; opacity: 0; } 35%, 70% { opacity: .7; } 82%, 100% { left: 112%; opacity: 0; } }
+@keyframes player-orbit { 0%, 100% { transform: scale(.92); opacity: .24; } 50% { transform: scale(1.08); opacity: .62; } }
 
 @media (prefers-reduced-motion: reduce) {
   .draft-trigger.drawing .draft-trigger-icon,
   .draft-trigger.drawing::after,
   .draft-result,
-  .lineup-player { animation: none; opacity: 1; }
+  .lineup-player,
+  .pitch-light,
+  .pitch-scan,
+  .premium-player .player-orbit::before { animation: none; opacity: 1; }
+  .stadium-pitch { transform: none; }
 }
