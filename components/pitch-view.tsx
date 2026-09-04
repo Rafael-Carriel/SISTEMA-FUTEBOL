@@ -74,6 +74,48 @@ interface PitchHalfProps {
   goalkeeperId?: string;
 }
 
+function FullFieldLines() {
+  return (
+    <svg className="absolute inset-0 size-full" viewBox="0 0 680 960" preserveAspectRatio="none" aria-hidden="true">
+      <g fill="none" stroke="rgba(255,255,255,.55)" strokeWidth="3">
+        <rect x="16" y="16" width="648" height="928" rx="5" />
+        <line x1="16" y1="480" x2="664" y2="480" />
+        <circle cx="340" cy="480" r="76" />
+        <rect x="142" y="16" width="396" height="152" />
+        <rect x="248" y="16" width="184" height="58" />
+        <path d="M266 168a88 88 0 0 0 148 0" />
+        <rect x="142" y="792" width="396" height="152" />
+        <rect x="248" y="886" width="184" height="58" />
+        <path d="M266 792a88 88 0 0 1 148 0" />
+        <path d="M16 48a32 32 0 0 0 32-32M632 16a32 32 0 0 0 32 32M16 912a32 32 0 0 1 32 32M632 944a32 32 0 0 1 32-32" />
+      </g>
+      <g fill="rgba(255,255,255,.75)">
+        <circle cx="340" cy="480" r="5" />
+        <circle cx="340" cy="112" r="5" />
+        <circle cx="340" cy="848" r="5" />
+      </g>
+    </svg>
+  );
+}
+
+function FullFieldPlayer({ player, x, y, teamColor, goalkeeper, index }: { player: Player; x: number; y: number; teamColor: string; goalkeeper: boolean; index: number }) {
+  return (
+    <div
+      className="full-field-player lineup-player premium-player pointer-events-none absolute flex flex-col items-center"
+      style={{ left: `${x}%`, top: `${y}%`, transform: 'translate(-50%,-50%)', '--team-color': teamColor, animationDelay: `${100 + index * 55}ms` } as React.CSSProperties}
+    >
+      <div className="player-orbit relative">
+        <span className="full-field-avatar relative grid place-items-center overflow-hidden rounded-full border-2 border-white font-black text-white" style={{ background: teamColor }}>
+          {player.photoUrl ? <img src={player.photoUrl} alt="" className="size-full object-cover" /> : initials(player)}
+        </span>
+        <span className="full-field-number absolute -bottom-1 -right-1 grid place-items-center rounded-full border-2 border-white font-black text-white" style={{ background: teamColor }}>{player.number}</span>
+        {goalkeeper && <span className="absolute -left-1 -top-1 grid size-5 place-items-center rounded-full border-2 border-white bg-[#07130d] text-[8px] font-black text-primary">G</span>}
+      </div>
+      <span className="full-field-name max-w-24 truncate rounded-md bg-black/70 px-2 py-1 text-center font-black text-white backdrop-blur-sm">{player.nickname}</span>
+    </div>
+  );
+}
+
 function PitchHalf({ teamName, teamColor, players, w, h, compact, flip, format, goalkeeperId }: PitchHalfProps) {
   const teamOverall = players.length
     ? Math.round(players.reduce((sum, item) => sum + Math.round((item.player.pace + item.player.shooting + item.player.passing + item.player.defending + item.player.physical) / 5), 0) / players.length)
@@ -193,6 +235,52 @@ export function PitchView({
     <div className="premium-lineup-shell flex w-full flex-col justify-center gap-6 p-3 sm:flex-row sm:p-5">
       <PitchHalf teamName={teamAName} teamColor={teamAColor} players={placedA} w={w} h={h} compact={compact} flip={false} format={format} goalkeeperId={goalkeeperAId} />
       <PitchHalf teamName={teamBName} teamColor={teamBColor} players={placedB} w={w} h={h} compact={compact} flip={false} format={format} goalkeeperId={goalkeeperBId} />
+    </div>
+  );
+}
+
+export function FullPitchView({
+  teamA,
+  teamB,
+  teamAName = 'Time Verde',
+  teamBName = 'Time Branco',
+  teamAColor = '#16a34a',
+  teamBColor = '#3b82f6',
+  format = 'F7',
+  goalkeeperAId,
+  goalkeeperBId,
+}: PitchViewProps) {
+  const cleanTeamA = useMemo(() => dedupePlayers(teamA), [teamA]);
+  const blocked = useMemo(() => new Set(cleanTeamA.map(playerIdentity)), [cleanTeamA]);
+  const cleanTeamB = useMemo(() => dedupePlayers(teamB, blocked), [teamB, blocked]);
+  const placedA = useMemo(() => assignFormationPositions(cleanTeamA, format, goalkeeperAId), [cleanTeamA, format, goalkeeperAId]);
+  const placedB = useMemo(() => assignFormationPositions(cleanTeamB, format, goalkeeperBId), [cleanTeamB, format, goalkeeperBId]);
+
+  return (
+    <div className="full-pitch-experience">
+      <div className="full-pitch-team full-pitch-team-away" style={{ '--team-color': teamBColor } as React.CSSProperties}>
+        <span style={{ background: teamBColor }} /><div><small>Visitante</small><b>{teamBName}</b></div><strong>{cleanTeamB.length}</strong>
+      </div>
+      <div className="full-pitch-stage">
+        <div className="full-stadium-pitch">
+          <div className="pitch-light pitch-light-left" />
+          <div className="pitch-light pitch-light-right" />
+          <div className="pitch-scan" />
+          <div className="full-pitch-center-glow" />
+          <FullFieldLines />
+          {placedB.map(({ player, x, y }, index) => (
+            <FullFieldPlayer key={player.id} player={player} x={x} y={(100 - y) / 2} teamColor={teamBColor} goalkeeper={player.id === goalkeeperBId} index={index} />
+          ))}
+          {placedA.map(({ player, x, y }, index) => (
+            <FullFieldPlayer key={player.id} player={player} x={x} y={50 + y / 2} teamColor={teamAColor} goalkeeper={player.id === goalkeeperAId} index={placedB.length + index} />
+          ))}
+          <div className="full-pitch-direction top">ATAQUE <span>↓</span></div>
+          <div className="full-pitch-direction bottom"><span>↑</span> ATAQUE</div>
+        </div>
+      </div>
+      <div className="full-pitch-team full-pitch-team-home" style={{ '--team-color': teamAColor } as React.CSSProperties}>
+        <span style={{ background: teamAColor }} /><div><small>Mandante</small><b>{teamAName}</b></div><strong>{cleanTeamA.length}</strong>
+      </div>
     </div>
   );
 }

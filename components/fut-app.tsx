@@ -2,14 +2,14 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { arrayUnion, collection, deleteDoc, deleteField, doc, getDocs, increment, onSnapshot, setDoc, updateDoc, writeBatch } from 'firebase/firestore';
-import { Activity, BadgeDollarSign, CalendarDays, Camera, Check, ChevronRight, CircleDollarSign, Download, Frown, Goal, ImageDown, LayoutDashboard, Medal, Menu, Monitor, Moon, Pencil, Plus, RectangleVertical, Repeat, Save, Shield, ShieldCheck, Shirt, Sparkles, Sun, Swords, Target, Trash2, Trophy, UserPlus, Users, WalletCards, X } from 'lucide-react';
+import { Activity, BadgeDollarSign, CalendarDays, Camera, Check, ChevronRight, CircleDollarSign, Download, Expand, Frown, Goal, ImageDown, LayoutDashboard, Medal, Menu, Monitor, Moon, Pencil, Plus, RectangleVertical, Repeat, Save, Shield, ShieldCheck, Shirt, Sparkles, Sun, Swords, Target, Trash2, Trophy, UserPlus, Users, WalletCards, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { db } from '@/lib/firebase';
 import { demoMatches, demoPayments, demoPlayers } from '@/lib/demo-data';
 import type { FieldPositions, Match, MatchEvent, MatchEventType, MatchFormat, Payment, Player, PlayerStats, Position } from '@/lib/fut-types';
-import { PitchView } from '@/components/pitch-view';
+import { FullPitchView, PitchView } from '@/components/pitch-view';
 import { DraggablePitch } from '@/components/draggable-pitch';
 import { LiveManager } from '@/components/live-manager';
 import { balancedTeamsSmart, getTeamBalanceInfo, uniqueLineupPlayers } from '@/lib/team-balancer';
@@ -122,6 +122,7 @@ export function FutApp() {
   const [connection, setConnection] = useState<'connecting' | 'online' | 'demo'>('connecting');
   const [dialog, setDialog] = useState<DialogName>(null);
   const [activeMatchId, setActiveMatchId] = useState(demoMatches[0].id);
+  const [expandedMatchId, setExpandedMatchId] = useState<string | null>(null);
   const [activePlayerId, setActivePlayerId] = useState(demoPlayers[0].id);
   const [notice, setNotice] = useState('');
   const [playerForm, setPlayerForm] = useState({ name: '', nickname: '', number: '10', position: 'ATA' as Position, photoUrl: '' });
@@ -198,6 +199,7 @@ export function FutApp() {
   /* ─── derived state ─── */
   const stats = useMemo(() => calculateStats(players, matches), [players, matches]);
   const activeMatch = matches.find((match) => match.id === activeMatchId) || matches[0];
+  const expandedMatch = matches.find((match) => match.id === expandedMatchId);
   const activePlayerStats = stats.find((item) => item.player.id === activePlayerId) || stats[0];
   const liveMatch = matches.find((match) => match.status === 'live');
   const paidPayments = payments.filter((payment) => payment.month === monthKey && payment.paid);
@@ -980,6 +982,12 @@ export function FutApp() {
 
             {/* Rosters flank the formations on wide screens. */}
             {teamAPlayers.length > 0 && teamBPlayers.length > 0 && (
+              <>
+              <div className="mt-4 flex justify-center">
+                <Button variant="outline" size="sm" onClick={() => setExpandedMatchId(match.id)} className="expand-pitch-button">
+                  <Expand className="size-4" /> Ver campo inteiro
+                </Button>
+              </div>
               <div className="match-lineup-layout">
                 <MatchRoster
                   name={match.teamAName}
@@ -1008,6 +1016,7 @@ export function FutApp() {
                   onSetGoalkeeper={(playerId) => setGoalkeeper(match.id, 'B', playerId)}
                 />
               </div>
+              </>
             )}
             {isLive && (
               <div className="mt-4 grid gap-2 sm:grid-cols-2">
@@ -1642,6 +1651,33 @@ export function FutApp() {
             <Button variant="outline" onClick={() => { setDialog(null); setPreviewTeams(null); setDragPositions({}); setEditingMatchId(null); }}>Cancelar</Button>
             <Button onClick={saveMatch}><Swords /> {editingMatchId ? 'Salvar alterações' : 'Montar times'}</Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Full-pitch lineup dialog */}
+      <Dialog open={Boolean(expandedMatch)} onOpenChange={(open) => !open && setExpandedMatchId(null)}>
+        <DialogContent className="full-pitch-dialog" aria-label="Escalação em campo inteiro">
+          {expandedMatch && (() => {
+            const teamAPlayers = expandedMatch.teamA.map((id) => playerById(id)).filter(Boolean) as Player[];
+            const teamBPlayers = expandedMatch.teamB.map((id) => playerById(id)).filter(Boolean) as Player[];
+            return <>
+              <DialogHeader className="full-pitch-dialog-header">
+                <div><p>Modo campo inteiro · {expandedMatch.format || 'F7'}</p><DialogTitle>{expandedMatch.title}</DialogTitle><DialogDescription>{expandedMatch.venue} · {formatDate(expandedMatch.date)} às {expandedMatch.time}</DialogDescription></div>
+                <div className="expanded-score"><span>{expandedMatch.teamAName}</span><strong>{expandedMatch.scoreA} <i>×</i> {expandedMatch.scoreB}</strong><span>{expandedMatch.teamBName}</span></div>
+              </DialogHeader>
+              <div className="full-pitch-scroll">
+                <FullPitchView
+                  teamA={teamAPlayers}
+                  teamB={teamBPlayers}
+                  teamAName={expandedMatch.teamAName}
+                  teamBName={expandedMatch.teamBName}
+                  format={expandedMatch.format || 'F7'}
+                  goalkeeperAId={expandedMatch.goalkeeperAId}
+                  goalkeeperBId={expandedMatch.goalkeeperBId}
+                />
+              </div>
+            </>;
+          })()}
         </DialogContent>
       </Dialog>
 

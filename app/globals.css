@@ -402,6 +402,43 @@ body {
   .premium-team-footer { @apply flex items-center justify-between border-t border-white/10 px-1 pt-2 text-[8px] font-bold uppercase tracking-[.11em] text-white/35; }
   .premium-team-footer span, .premium-team-footer b { @apply flex items-center gap-1; }
   .premium-team-footer b { color: var(--team-color); }
+  .expand-pitch-button { @apply h-10 rounded-full border-primary/30 bg-primary/10 px-5 font-black text-brand-ink shadow-[0_8px_24px_rgba(50,180,80,.12)] transition-all hover:-translate-y-0.5 hover:border-primary hover:bg-primary hover:text-primary-foreground; }
+  .full-pitch-dialog { @apply h-[96dvh] max-h-[96dvh] w-[min(1100px,calc(100%-1rem))] max-w-none gap-0 overflow-hidden rounded-[26px] border-white/10 bg-[#06110b] p-0 text-white shadow-[0_40px_120px_rgba(0,0,0,.65)]; }
+  .full-pitch-dialog > [data-slot='dialog-close'] { @apply right-3 top-3 z-30 rounded-full bg-white/10 text-white hover:bg-white/20 hover:text-white; }
+  .full-pitch-dialog-header { @apply relative z-20 grid shrink-0 gap-3 border-b border-white/10 bg-[#091810]/95 px-5 py-4 pr-14 sm:grid-cols-[1fr_auto] sm:items-center sm:px-7; }
+  .full-pitch-dialog-header p { @apply text-[9px] font-black uppercase tracking-[.18em] text-primary; }
+  .full-pitch-dialog-header [data-slot='dialog-title'] { @apply mt-1 text-xl font-black tracking-tight text-white; }
+  .full-pitch-dialog-header [data-slot='dialog-description'] { @apply mt-1 text-xs text-white/40; }
+  .expanded-score { @apply flex items-center justify-center gap-3 rounded-2xl border border-white/10 bg-white/[.05] px-4 py-2; }
+  .expanded-score span { @apply max-w-24 truncate text-[9px] font-black uppercase tracking-wider text-white/45; }
+  .expanded-score strong { @apply whitespace-nowrap text-2xl font-black tabular-nums; }
+  .expanded-score i { @apply px-1 text-xs not-italic text-white/25; }
+  .full-pitch-scroll { @apply min-h-0 flex-1 overflow-auto; background: radial-gradient(circle at 50% 20%, rgba(186,255,85,.1), transparent 38%), #06110b; }
+  .full-pitch-experience { @apply mx-auto flex min-h-full w-full max-w-[720px] flex-col items-center gap-3 p-4 sm:p-6; }
+  .full-pitch-team { @apply flex w-full items-center gap-3 rounded-2xl border border-white/10 bg-white/[.045] px-4 py-2.5 backdrop-blur; box-shadow: inset 4px 0 0 var(--team-color); }
+  .full-pitch-team > span { @apply size-3 shrink-0 rounded-full; box-shadow: 0 0 16px var(--team-color); }
+  .full-pitch-team > div { @apply min-w-0 flex-1; }
+  .full-pitch-team small { @apply block text-[8px] font-black uppercase tracking-[.16em] text-white/30; }
+  .full-pitch-team b { @apply block truncate text-xs font-black uppercase tracking-wider; color: var(--team-color); }
+  .full-pitch-team strong { @apply grid size-8 place-items-center rounded-xl bg-white/[.07] text-xs font-black text-white/65; }
+  .full-pitch-stage { @apply w-full; perspective: 1300px; }
+  .full-stadium-pitch { @apply relative mx-auto w-full overflow-hidden rounded-[24px] border-2 border-white/30; aspect-ratio: 680 / 960; background: repeating-linear-gradient(90deg,rgba(255,255,255,.025) 0,rgba(255,255,255,.025) 12.5%,transparent 12.5%,transparent 25%),linear-gradient(180deg,#10703d 0%,#064d2d 50%,#10703d 100%); box-shadow: 0 0 0 1px rgba(186,255,85,.15), 0 32px 80px rgba(0,0,0,.55), inset 0 0 100px rgba(0,0,0,.3); transform: rotateX(1deg); transform-origin: 50% 50%; }
+  .full-stadium-pitch::before { content: ''; @apply pointer-events-none absolute inset-0 z-[1]; background: radial-gradient(ellipse at center, transparent 38%, rgba(0,0,0,.34) 100%); }
+  .full-pitch-center-glow { @apply pointer-events-none absolute left-1/2 top-1/2 z-[2] size-[28%] -translate-x-1/2 -translate-y-1/2 rounded-full bg-primary/5 blur-2xl; }
+  .full-field-player { z-index: 5 !important; }
+  .full-field-avatar { width: clamp(32px, 7vw, 52px); height: clamp(32px, 7vw, 52px); font-size: clamp(8px, 1.7vw, 12px); box-shadow: 0 0 0 4px color-mix(in srgb,var(--team-color) 25%,transparent),0 12px 24px rgba(0,0,0,.48); }
+  .full-field-number { width: clamp(16px,3.2vw,21px); height: clamp(16px,3.2vw,21px); font-size: clamp(6px,1.3vw,8px); }
+  .full-field-name { @apply mt-1; font-size: clamp(7px,1.6vw,10px); }
+  .full-pitch-direction { @apply pointer-events-none absolute left-1/2 z-[4] -translate-x-1/2 rounded-full border border-white/10 bg-black/20 px-3 py-1 text-[7px] font-black tracking-[.2em] text-white/20; }
+  .full-pitch-direction.top { @apply top-[43%]; }
+  .full-pitch-direction.bottom { @apply bottom-[43%]; }
+
+  @media (max-width: 640px) {
+    .full-pitch-dialog { @apply h-[98dvh] max-h-[98dvh] w-[calc(100%-0.5rem)] rounded-[20px]; }
+    .full-pitch-dialog-header { @apply px-4 py-3 pr-12; }
+    .expanded-score { @apply justify-between px-3; }
+    .full-pitch-experience { @apply p-3; }
+  }
 
   .art-preview { @apply relative aspect-[4/5] overflow-hidden rounded-[28px] bg-[#07100b] p-[7%] text-white shadow-2xl; }
   .art-preview::before { content: ''; @apply absolute -right-[18%] -top-[5%] size-[55%] rounded-full bg-primary/15 blur-3xl; }
