@@ -142,6 +142,8 @@ export function FutApp() {
   const [monthlyValue, setMonthlyValue] = useState(40);
   const [showAvulsoForm, setShowAvulsoForm] = useState(false);
   const [avulsoName, setAvulsoName] = useState('');
+  const [avulsoMatchId, setAvulsoMatchId] = useState('');
+  const [avulsoValue, setAvulsoValue] = useState(20);
 
   /* ─── theme (light / dark / system) ─── */
   const [themeMode, setThemeMode] = useState<'light' | 'dark' | 'system'>('system');
@@ -349,15 +351,19 @@ export function FutApp() {
     try { await setDoc(doc(db, 'payments', id), next); } catch { /* offline */ }
   }
 
-  async function addAvulso() {
-    if (!avulsoName.trim()) return showNotice('Digite o nome do avulso.');
+  async function addAvulso(): Promise<string | null> {
+    if (!avulsoName.trim()) { showNotice('Digite o nome do avulso.'); return null; }
     const id = `avulso_${paymentMonth}_${crypto.randomUUID().slice(0, 8)}`;
+    const name = avulsoName.trim();
     const avulsoPlayer: Player = {
-      id, name: avulsoName.trim(), nickname: avulsoName.trim(), number: 0,
+      id, name, nickname: name, number: 0,
       position: 'ATA', pace: 0, shooting: 0, passing: 0, defending: 0, physical: 0,
       createdAt: new Date().toISOString(),
+      isAvulso: true,
+      matchId: avulsoMatchId || undefined,
+      avulsoValue: avulsoValue,
     };
-    const payment: Payment = { id: `${paymentMonth}_${id}`, playerId: id, month: paymentMonth, amount: monthlyValue, paid: false };
+    const payment: Payment = { id: `${paymentMonth}_${id}`, playerId: id, month: paymentMonth, amount: avulsoValue, paid: false };
     try {
       await setDoc(doc(db, 'players', id), avulsoPlayer);
       await setDoc(doc(db, 'payments', payment.id), payment);
@@ -365,8 +371,11 @@ export function FutApp() {
     setPlayers((all) => [...all, avulsoPlayer]);
     setPayments((all) => [...all, payment]);
     setAvulsoName('');
+    setAvulsoMatchId('');
+    setAvulsoValue(20);
     setShowAvulsoForm(false);
-    showNotice(`${avulsoName.trim()} adicionado como avulso.`);
+    showNotice(`${name} adicionado como avulso.`);
+    return id;
   }
 
   async function removeAvulso(playerId: string) {
@@ -375,6 +384,21 @@ export function FutApp() {
     setPlayers((all) => all.filter((p) => p.id !== playerId));
     setPayments((all) => all.filter((p) => p.playerId !== playerId));
     showNotice('Avulso removido.');
+  }
+
+  async function deletePlayer(player: Player) {
+    if (!window.confirm(`Excluir ${player.nickname} permanentemente?`)) return;
+    try { await deleteDoc(doc(db, 'players', player.id)); } catch { /* offline */ }
+    setPlayers((all) => all.filter((p) => p.id !== player.id));
+    setMatches((all) => all.map((m) => ({
+      ...m,
+      teamA: m.teamA.filter((id) => id !== player.id),
+      teamB: m.teamB.filter((id) => id !== player.id),
+      goalkeeperAId: m.goalkeeperAId === player.id ? undefined : m.goalkeeperAId,
+      goalkeeperBId: m.goalkeeperBId === player.id ? undefined : m.goalkeeperBId,
+    })));
+    setDialog(null);
+    showNotice(`${player.nickname} foi excluído.`);
   }
 
   async function setGoalkeeper(matchId: string, team: 'A' | 'B', playerId: string) {
@@ -1014,7 +1038,42 @@ export function FutApp() {
   })}</div>;
 
   /* ─── PLAYERS VIEW ─── */
-  const playersView = () => <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">{[...stats].sort((a, b) => b.overall - a.overall).map((item) => <button key={item.player.id} onClick={() => { setActivePlayerId(item.player.id); setDialog('playerCard'); }} className="player-card"><div className="player-card-head"><PlayerAvatar player={item.player} size="lg" /><div className="min-w-0 flex-1"><p>{item.player.position} · camisa {item.player.number}</p><h3>{item.player.nickname}</h3><small>{item.player.name}</small></div><div className="overall">{item.overall}<small>OVR</small></div></div><div className="grid grid-cols-4 gap-2 p-4"><StatPill value={item.goals} label="Gols" /><StatPill value={item.assists} label="Assist." /><StatPill value={item.wins} label="Vitórias" /><StatPill value={item.appearances} label="Jogos" /></div></button>)}</div>;
+  const playersView = () => <div>
+    <div className="mb-4 flex items-center gap-3">
+      <Button variant="outline" size="sm" onClick={() => setShowAvulsoForm(!showAvulsoForm)}>
+        <UserPlus className="size-4" /> {showAvulsoForm ? 'Cancelar' : 'Adicionar avulso'}
+      </Button>
+    </div>
+    {showAvulsoForm && <div className="mb-4 space-y-2 rounded-xl border p-3">
+      <Input placeholder="Nome do avulso" value={avulsoName} onChange={(e) => setAvulsoName(e.target.value)} className="w-full" autoFocus />
+      <div className="flex gap-2">
+        <select value={avulsoMatchId} onChange={(e) => setAvulsoMatchId(e.target.value)} className="form-control h-9 flex-1 text-xs">
+          <option value="">Sem jogo específico</option>
+          {matches.filter((m) => m.status !== 'finished').map((match) => (
+            <option key={match.id} value={match.id}>{match.title} — {formatDate(match.date)}</option>
+          ))}
+        </select>
+        <div className="flex items-center gap-1 rounded-md border bg-muted/30 px-2">
+          <span className="text-[10px] text-muted-foreground">R$</span>
+          <input type="number" value={avulsoValue} onChange={(e) => setAvulsoValue(Number(e.target.value) || 0)} className="w-10 bg-transparent text-xs font-bold outline-none" min={0} />
+        </div>
+      </div>
+      <Button size="sm" onClick={addAvulso} className="w-full"><Check className="size-4" /> Adicionar avulso</Button>
+    </div>}
+    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">{[...stats].sort((a, b) => b.overall - a.overall).map((item) => <div key={item.player.id} className="group player-card relative">
+      <button onClick={() => { setActivePlayerId(item.player.id); setDialog('playerCard'); }} className="w-full text-left">
+        <div className="player-card-head"><PlayerAvatar player={item.player} size="lg" /><div className="min-w-0 flex-1"><p>{item.player.position} · camisa {item.player.number}</p><h3>{item.player.nickname}</h3><small>{item.player.name}</small></div><div className="overall">{item.overall}<small>OVR</small></div></div>
+        <div className="grid grid-cols-4 gap-2 p-4"><StatPill value={item.goals} label="Gols" /><StatPill value={item.assists} label="Assist." /><StatPill value={item.wins} label="Vitórias" /><StatPill value={item.appearances} label="Jogos" /></div>
+      </button>
+      <button
+        onClick={(e) => { e.stopPropagation(); deletePlayer(item.player); }}
+        className="absolute top-2 right-2 rounded-lg bg-red-500/10 p-1.5 text-red-500 opacity-0 transition-all hover:bg-red-500/20 group-hover:opacity-100"
+        title={`Excluir ${item.player.nickname}`}
+      >
+        <Trash2 className="size-3.5" />
+      </button>
+    </div>)}</div>
+  </div>;
 
   /* ─── RANKINGS VIEW (SofaScore style) ─── */
   const rankingSections: { title: string; key: RankingTab; suffix: string; icon: typeof Target; extra?: string }[] = [
@@ -1203,19 +1262,25 @@ export function FutApp() {
                 <p className="px-5 pt-3 text-[10px] font-extrabold uppercase tracking-wider text-muted-foreground">Avulsos</p>
                 {avulsos.map((player) => {
                   const payment = filteredPayments.find((item) => item.playerId === player.id);
+                  const match = player.matchId ? matches.find((m) => m.id === player.matchId) : null;
                   return (
                     <div key={player.id} className="flex items-center gap-3 px-5 py-3">
                       <PlayerAvatar player={player} />
                       <div className="min-w-0 flex-1">
                         <b>{player.nickname}</b>
-                        <p className="text-xs text-muted-foreground">Avulso · {payment?.paid ? 'Pago' : 'Pendente'}</p>
+                        <p className="text-xs text-muted-foreground">
+                          Avulso · {match ? `${match.title} - ${formatDate(match.date)}` : 'Sem jogo específico'}
+                        </p>
+                        <p className="text-[10px] text-muted-foreground">
+                          {payment?.paid ? 'Pago' : 'Pendente'} · R$ {payment?.amount ?? player.avulsoValue ?? avulsoValue}
+                        </p>
                       </div>
                       <div className="flex items-center gap-2">
                         <div className="flex items-center gap-1 rounded-md border bg-muted/30 px-2 py-1">
                           <span className="text-[10px] text-muted-foreground">R$</span>
                           <input
                             type="number"
-                            value={payment?.amount ?? monthlyValue}
+                            value={payment?.amount ?? player.avulsoValue ?? avulsoValue}
                             onChange={(e) => updatePaymentAmount(player, Number(e.target.value) || 0)}
                             className="w-10 bg-transparent text-xs font-bold outline-none"
                             min={0}
@@ -1237,18 +1302,47 @@ export function FutApp() {
 
           <div className="border-t p-4">
             {showAvulsoForm ? (
-              <div className="flex items-center gap-2">
+              <div className="space-y-3">
                 <input
                   type="text"
                   value={avulsoName}
                   onChange={(e) => setAvulsoName(e.target.value)}
                   placeholder="Nome do avulso"
-                  className="form-control h-9 flex-1 text-sm"
+                  className="form-control h-9 w-full text-sm"
                   autoFocus
                   onKeyDown={(e) => { if (e.key === 'Enter') addAvulso(); if (e.key === 'Escape') setShowAvulsoForm(false); }}
                 />
-                <Button onClick={addAvulso} className="h-9 px-4"><Check className="size-4" /></Button>
-                <Button variant="outline" onClick={() => setShowAvulsoForm(false)} className="h-9 px-4"><X className="size-4" /></Button>
+                <div className="flex gap-2">
+                  <div className="flex-1">
+                    <label className="text-[10px] font-bold text-muted-foreground">Jogo (opcional)</label>
+                    <select
+                      value={avulsoMatchId}
+                      onChange={(e) => setAvulsoMatchId(e.target.value)}
+                      className="form-control h-9 w-full text-xs"
+                    >
+                      <option value="">Sem jogo específico</option>
+                      {matches.filter((m) => m.status !== 'finished').map((match) => (
+                        <option key={match.id} value={match.id}>
+                          {match.title} - {formatDate(match.date)}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="w-24">
+                    <label className="text-[10px] font-bold text-muted-foreground">Valor (R$)</label>
+                    <input
+                      type="number"
+                      value={avulsoValue}
+                      onChange={(e) => setAvulsoValue(Number(e.target.value) || 0)}
+                      className="form-control h-9 w-full text-xs"
+                      min={0}
+                    />
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <Button onClick={addAvulso} className="h-9 flex-1"><Check className="size-4" /> Adicionar</Button>
+                  <Button variant="outline" onClick={() => setShowAvulsoForm(false)} className="h-9 px-4"><X className="size-4" /></Button>
+                </div>
               </div>
             ) : (
               <Button variant="outline" onClick={() => setShowAvulsoForm(true)} className="w-full">
@@ -1457,6 +1551,51 @@ export function FutApp() {
                   </span>
                 )}
               </p>
+              {playersShort && (
+                <div className="mt-2 rounded-xl border border-dashed border-amber-500/40 bg-amber-500/5 p-3">
+                  <p className="mb-2 text-[11px] font-bold text-amber-500">
+                    Faltam jogadores para fechar os times. Adicione um avulso:
+                  </p>
+                  <div className="flex gap-2">
+                    <Input
+                      placeholder="Nome do avulso"
+                      value={avulsoName}
+                      onChange={(e) => setAvulsoName(e.target.value)}
+                      className="h-8 flex-1 text-xs"
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && avulsoName.trim()) {
+                          addAvulso().then((newId) => {
+                            if (newId) setMatchForm((form) => ({ ...form, selected: [...form.selected, newId] }));
+                          });
+                        }
+                      }}
+                    />
+                    <div className="flex items-center gap-1 rounded-md border bg-muted/30 px-2">
+                      <span className="text-[10px] text-muted-foreground">R$</span>
+                      <input
+                        type="number"
+                        value={avulsoValue}
+                        onChange={(e) => setAvulsoValue(Number(e.target.value) || 0)}
+                        className="w-10 bg-transparent text-xs font-bold outline-none"
+                        min={0}
+                      />
+                    </div>
+                    <Button
+                      size="sm"
+                      onClick={async () => {
+                        const newId = await addAvulso();
+                        if (newId) {
+                          setMatchForm((form) => ({ ...form, selected: [...form.selected, newId] }));
+                        }
+                      }}
+                      disabled={!avulsoName.trim()}
+                      className="h-8"
+                    >
+                      <UserPlus className="size-3" /> Avulso
+                    </Button>
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="sm:col-span-2">
@@ -1527,7 +1666,12 @@ export function FutApp() {
           <div className="big-player-card"><PlayerAvatar player={activePlayerStats.player} size="xl" /><div><small>{activePlayerStats.player.position} · camisa {activePlayerStats.player.number}</small><h3>{activePlayerStats.player.nickname}</h3><p>{activePlayerStats.player.name}</p></div><strong>{activePlayerStats.overall}<small>OVERALL</small></strong></div>
           <label className="rating"><span>Overall</span><input type="range" min="1" max="99" value={activePlayerStats.overall} onChange={(e) => setOverall(activePlayerStats.player, Number(e.target.value))} /><b>{activePlayerStats.overall}</b></label>
           <div className="space-y-3">{([['pace', 'Velocidade'], ['shooting', 'Finalização'], ['passing', 'Passe'], ['defending', 'Defesa'], ['physical', 'Físico']] as const).map(([field, label]) => <label key={field} className="rating"><span>{label}</span><input type="range" min="1" max="99" value={activePlayerStats.player[field]} onChange={(e) => updateRating(activePlayerStats.player, field, Number(e.target.value))} /><b>{activePlayerStats.player[field]}</b></label>)}</div>
-          <DialogFooter><Button variant="outline" onClick={() => setDialog(null)}>Fechar</Button><Button onClick={() => { setArtPlayerId(activePlayerStats.player.id); setArtPhotoUrl(''); setDialog(null); setView('arts'); }}><Sparkles /> Criar arte</Button></DialogFooter>
+          <DialogFooter>
+            <Button variant="destructive" size="sm" onClick={() => deletePlayer(activePlayerStats.player)}>Excluir jogador</Button>
+            <div className="flex-1" />
+            <Button variant="outline" onClick={() => setDialog(null)}>Fechar</Button>
+            <Button onClick={() => { setArtPlayerId(activePlayerStats.player.id); setArtPhotoUrl(''); setDialog(null); setView('arts'); }}><Sparkles /> Criar arte</Button>
+          </DialogFooter>
         </>}</DialogContent>
       </Dialog>
     </main>

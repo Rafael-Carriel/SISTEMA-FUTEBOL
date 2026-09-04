@@ -15,6 +15,9 @@ export type Player = {
   defending: number;
   physical: number;
   createdAt: string;
+  isAvulso?: boolean;
+  matchId?: string;
+  avulsoValue?: number;
 };
 
 export type MatchEventType = 'goal' | 'save' | 'frango' | 'yellow' | 'red' | 'substitution';
