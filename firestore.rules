@@ -52,10 +52,6 @@ service cloud.firestore {
 
     // Leitura: admin + member. Escrita: só admin.
     // Documentos legados (sem orgId) seguem a janela de transição.
-    function canAccessOrgData(data) {
-      return (isOrgScoped(data) && hasOrgAccess(data.orgId, ['admin']))
-        || (!isOrgScoped(data) && isTransitionWindow());
-    }
 
     function canReadOrgData(data) {
       return (isOrgScoped(data) && hasOrgAccess(data.orgId, ['admin', 'member']))
