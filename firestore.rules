@@ -1,9 +1,118 @@
 rules_version = '2';
+
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Protótipo sem login: o acesso aberto expira automaticamente em 1º de outubro.
-    match /{document=**} {
-      allow read, write: if request.time < timestamp.date(2026, 10, 1);
+
+    // =====================================================================
+    // Helpers — Zero-Trust Multi-Tenant
+    // =====================================================================
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isSelf(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    // Gate multi-tenant: o ID token carrega a custom claim
+    //   organizations: { "<orgId>": "admin" | "member" }
+    // O acesso só é concedido se o usuário estiver autenticado, a org estiver
+    // presente na claim e o papel dela estiver em allowedRoles.
+    function hasOrgAccess(orgId, allowedRoles) {
+      return isSignedIn()
+        && request.auth.token.organizations is map
+        && request.auth.token.organizations.keys().hasAny([orgId])
+        && request.auth.token.organizations[orgId] in allowedRoles;
+    }
+
+    // Janela de transição: documentos legados sem orgId continuam acessíveis
+    // pelo prazo original da regra aberta, para não quebrar o app durante a
+    // migração. Depois de 01/10/2026 todo documento precisa ser org-scoped.
+    function isTransitionWindow() {
+      return request.time < timestamp.date(2026, 10, 1);
+    }
+
+    function isOrgScoped(data) {
+      return data.keys().hasAll(['orgId']) && data.orgId != null && data.orgId != '';
+    }
+
+    // Leitura/escrita de dados org-scoped: exige papel autorizado na org.
+    // Documentos legados (sem orgId) seguem a janela de transição.
+    function canAccessOrgData(data) {
+      return (isOrgScoped(data) && hasOrgAccess(data.orgId, ['admin']))
+        || (!isOrgScoped(data) && isTransitionWindow());
+    }
+
+    // =====================================================================
+    // Organizações
+    // =====================================================================
+
+    match /organizations/{orgId} {
+      allow read: if hasOrgAccess(orgId, ['admin']);
+
+      // Bootstrap: usuário autenticado pode criar a própria organização.
+      allow create: if isSignedIn()
+        && request.resource.data.createdBy == request.auth.uid;
+
+      allow update, delete: if hasOrgAccess(orgId, ['admin']);
+    }
+
+    // =====================================================================
+    // Membros (subcoleção) — escrita somente admin
+    // =====================================================================
+
+    match /organizations/{orgId}/members/{userId} {
+      allow read: if hasOrgAccess(orgId, ['admin']) || isSelf(userId);
+
+      // Escrita somente admin. Exceção: o criador da org pode registrar a si
+      // mesmo como admin durante o bootstrap.
+      allow create: if hasOrgAccess(orgId, ['admin'])
+        || (isSelf(userId)
+            && request.resource.data.userId == request.auth.uid
+            && request.resource.data.role == 'admin'
+            && get(/databases/$(database)/documents/organizations/$(orgId)).data.createdBy == request.auth.uid);
+
+      allow update, delete: if hasOrgAccess(orgId, ['admin']);
+    }
+
+    // =====================================================================
+    // Convites (subcoleção) — escrita somente admin
+    // =====================================================================
+
+    match /organizations/{orgId}/invites/{inviteId} {
+      // Admin da org ou o próprio convidado (pelo e-mail do token).
+      allow read: if hasOrgAccess(orgId, ['admin'])
+        || (isSignedIn()
+            && request.auth.token.email != null
+            && resource.data.email == request.auth.token.email);
+
+      allow create, update, delete: if hasOrgAccess(orgId, ['admin']);
+    }
+
+    // =====================================================================
+    // Dados do app — agora org-scoped (players / matches / payments)
+    // =====================================================================
+
+    match /players/{playerId} {
+      allow read: if canAccessOrgData(resource.data);
+      allow create: if canAccessOrgData(request.resource.data);
+      allow update: if canAccessOrgData(resource.data) && canAccessOrgData(request.resource.data);
+      allow delete: if canAccessOrgData(resource.data);
+    }
+
+    match /matches/{matchId} {
+      allow read: if canAccessOrgData(resource.data);
+      allow create: if canAccessOrgData(request.resource.data);
+      allow update: if canAccessOrgData(resource.data) && canAccessOrgData(request.resource.data);
+      allow delete: if canAccessOrgData(resource.data);
+    }
+
+    match /payments/{paymentId} {
+      allow read: if canAccessOrgData(resource.data);
+      allow create: if canAccessOrgData(request.resource.data);
+      allow update: if canAccessOrgData(resource.data) && canAccessOrgData(request.resource.data);
+      allow delete: if canAccessOrgData(resource.data);
     }
   }
 }
