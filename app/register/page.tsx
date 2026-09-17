@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, type ChangeEvent, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from 'react';
 import {
   GoogleAuthProvider,
   createUserWithEmailAndPassword,
@@ -33,6 +33,15 @@ import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAuth } from '@/lib/auth-context';
 import { auth } from '@/lib/firebase';
+import { createOrganization } from '@/lib/organizations';
+import {
+  getPhoneAuthErrorMessage,
+  initRecaptcha,
+  resetPhoneAuth,
+  sendVerificationCode,
+  validateBrazilianPhone,
+  verifyCode,
+} from '@/lib/phone-auth';
 
 /** Landing spot for authenticated users. */
 const APP_HOME = '/app';
@@ -136,17 +145,24 @@ export default function RegisterPage() {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [phone, setPhone] = useState('');
+  const [smsCode, setSmsCode] = useState('');
+  const [phoneStep, setPhoneStep] = useState<'phone' | 'code'>('phone');
+  const [smsSending, setSmsSending] = useState(false);
+  const [codeVerifying, setCodeVerifying] = useState(false);
   const [errors, setErrors] = useState<FieldErrors>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
+  const recaptchaReady = useRef(false);
 
   useEffect(() => {
     if (!loading && user) {
       window.location.replace(APP_HOME);
     }
   }, [loading, user]);
+
+  useEffect(() => () => resetPhoneAuth(), []);
 
   function handleMethodChange(value: Method) {
     setMethod(value);
@@ -199,9 +215,17 @@ export default function RegisterPage() {
 
     setSubmitting(true);
     try {
-      // Organization provisioning is UI-only for now: `trimmedOrg` will be sent
-      // to the org-creation flow once it lands.
-      await createUserWithEmailAndPassword(auth, trimmedEmail, password);
+      const cred = await createUserWithEmailAndPassword(auth, trimmedEmail, password);
+      if (isFirstUser && trimmedOrg) {
+        try {
+          const org = await createOrganization(trimmedOrg, cred.user);
+          window.location.assign(`/f/${org.slug}`);
+          return;
+        } catch (orgError) {
+          setFormError(orgError instanceof Error ? orgError.message : 'Conta criada, mas não foi possível criar o futebol.');
+          return;
+        }
+      }
       window.location.assign(APP_HOME);
     } catch (error) {
       setFormError(authErrorMessage(error));
@@ -213,11 +237,25 @@ export default function RegisterPage() {
   async function handleGoogleSignIn() {
     setFormError(null);
     setNotice(null);
+    if (isFirstUser && orgName.trim().length < 2) {
+      setErrors({ org: 'Informe o nome do futebol para criar.' });
+      return;
+    }
     setGoogleLoading(true);
     try {
       const provider = new GoogleAuthProvider();
       provider.setCustomParameters({ prompt: 'select_account' });
-      await signInWithPopup(auth, provider);
+      const cred = await signInWithPopup(auth, provider);
+      if (isFirstUser && orgName.trim()) {
+        try {
+          const org = await createOrganization(orgName.trim(), cred.user);
+          window.location.assign(`/f/${org.slug}`);
+          return;
+        } catch (orgError) {
+          setFormError(orgError instanceof Error ? orgError.message : 'Conta criada, mas não foi possível criar o futebol.');
+          return;
+        }
+      }
       window.location.assign(APP_HOME);
     } catch (error) {
       setFormError(authErrorMessage(error));
@@ -226,26 +264,62 @@ export default function RegisterPage() {
     }
   }
 
-  function handlePhoneSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handlePhoneSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setFormError(null);
     setNotice(null);
 
-    const digits = phone.replace(/\D/g, '');
-    const nextErrors: FieldErrors = {};
-    if (!digits) nextErrors.phone = 'Informe seu número de celular.';
-    else if (digits.length !== PHONE_LOCAL_LENGTH || digits[2] !== '9')
-      nextErrors.phone = 'Informe um celular válido com DDD, ex.: (11) 99999-9999.';
+    if (isFirstUser && orgName.trim().length < 2) {
+      setErrors({ org: 'Informe o nome do futebol para criar.' });
+      return;
+    }
+    const validation = validateBrazilianPhone(phone);
+    if (!validation.valid || !validation.e164) {
+      setErrors({ phone: validation.error ?? 'Informe um celular válido com DDD.' });
+      return;
+    }
 
-    setErrors(nextErrors);
-    if (Object.keys(nextErrors).length > 0) return;
-
-    // Phone registration is UI-only for now. The reCAPTCHA verifier and SMS
-    // flow land in a follow-up, so we surface an informative notice instead.
-    setNotice('O cadastro por telefone estará disponível em breve.');
+    setSmsSending(true);
+    try {
+      if (!recaptchaReady.current) {
+        initRecaptcha('recaptcha-container-register');
+        recaptchaReady.current = true;
+      }
+      await sendVerificationCode(validation.e164);
+      setPhoneStep('code');
+      setNotice(`Código enviado para ${validation.formatted}.`);
+    } catch (error) {
+      setFormError(getPhoneAuthErrorMessage(error));
+    } finally {
+      setSmsSending(false);
+    }
   }
 
-  const busy = submitting || googleLoading;
+  async function handleCodeSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setFormError(null);
+    setCodeVerifying(true);
+    try {
+      const cred = await verifyCode(smsCode);
+      if (isFirstUser && orgName.trim()) {
+        try {
+          const org = await createOrganization(orgName.trim(), cred.user);
+          window.location.assign(`/f/${org.slug}`);
+          return;
+        } catch (orgError) {
+          setFormError(orgError instanceof Error ? orgError.message : 'Conta criada, mas não foi possível criar o futebol.');
+          return;
+        }
+      }
+      window.location.assign(APP_HOME);
+    } catch (error) {
+      setFormError(getPhoneAuthErrorMessage(error));
+    } finally {
+      setCodeVerifying(false);
+    }
+  }
+
+  const busy = submitting || googleLoading || smsSending || codeVerifying;
 
   if (loading && !user) {
     return (
@@ -508,55 +582,66 @@ export default function RegisterPage() {
                 </TabsContent>
 
                 <TabsContent value="phone" className="mt-4">
-                  <form onSubmit={handlePhoneSubmit} noValidate className="space-y-4">
-                    <div className="space-y-1.5">
-                      <Label htmlFor="phone">Celular</Label>
-                      <div className="flex items-stretch">
-                        <span className="inline-flex items-center gap-1.5 rounded-l-lg border border-r-0 border-input bg-muted px-3 text-sm font-bold text-muted-foreground">
-                          <Phone className="size-4" />
-                          +55
-                        </span>
+                  {phoneStep === 'phone' ? (
+                    <form onSubmit={handlePhoneSubmit} noValidate className="space-y-4">
+                      <div className="space-y-1.5">
+                        <Label htmlFor="phone-register">Celular</Label>
+                        <div className="flex items-stretch">
+                          <span className="inline-flex items-center gap-1.5 rounded-l-lg border border-r-0 border-input bg-muted px-3 text-sm font-bold text-muted-foreground">
+                            <Phone className="size-4" />
+                            +55
+                          </span>
+                          <Input
+                            id="phone-register"
+                            type="tel"
+                            inputMode="numeric"
+                            autoComplete="tel-national"
+                            placeholder="(11) 99999-9999"
+                            value={phone}
+                            onChange={handlePhoneChange}
+                            disabled={busy}
+                            className="h-11 rounded-l-none"
+                          />
+                        </div>
+                        {errors.phone ? (
+                          <p className="text-xs font-medium text-destructive">{errors.phone}</p>
+                        ) : null}
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label>Verificação de segurança</Label>
+                        <div id="recaptcha-container-register" className="flex min-h-10 items-center justify-center rounded-xl border border-dashed border-border bg-muted/40 px-4 py-3 text-center">
+                          <p className="text-xs font-semibold text-muted-foreground">Protegido por reCAPTCHA invisível.</p>
+                        </div>
+                      </div>
+                      <Button type="submit" size="lg" disabled={busy} className="h-11 w-full text-base font-semibold">
+                        {smsSending ? <><Spinner /> Enviando…</> : 'Receber código por SMS'}
+                      </Button>
+                    </form>
+                  ) : (
+                    <form onSubmit={handleCodeSubmit} noValidate className="space-y-4">
+                      <div className="space-y-1.5">
+                        <Label htmlFor="sms-code-register">Código SMS</Label>
                         <Input
-                          id="phone"
-                          type="tel"
+                          id="sms-code-register"
+                          type="text"
                           inputMode="numeric"
-                          autoComplete="tel-national"
-                          placeholder="(11) 99999-9999"
-                          value={phone}
-                          onChange={handlePhoneChange}
-                          aria-invalid={Boolean(errors.phone)}
-                          aria-describedby={errors.phone ? 'phone-error' : undefined}
-                          className="h-11 rounded-l-none"
+                          autoComplete="one-time-code"
+                          placeholder="000000"
+                          maxLength={6}
+                          value={smsCode}
+                          onChange={(e) => setSmsCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                          disabled={busy}
+                          className="h-11 text-center text-lg font-bold tracking-[.3em]"
                         />
                       </div>
-                      {errors.phone ? (
-                        <p id="phone-error" className="text-xs font-medium text-destructive">
-                          {errors.phone}
-                        </p>
-                      ) : null}
-                    </div>
-
-                    <div className="space-y-1.5">
-                      <Label htmlFor="recaptcha-container">Verificação de segurança</Label>
-                      <div
-                        id="recaptcha-container"
-                        className="flex min-h-20 items-center justify-center rounded-xl border border-dashed border-border bg-muted/40 px-4 py-5 text-center"
-                      >
-                        <p className="text-xs font-semibold text-muted-foreground">
-                          reCAPTCHA será exibido aqui quando o cadastro por telefone for ativado.
-                        </p>
-                      </div>
-                    </div>
-
-                    <Button
-                      type="submit"
-                      size="lg"
-                      disabled={busy}
-                      className="h-11 w-full text-base font-semibold"
-                    >
-                      Receber código por SMS
-                    </Button>
-                  </form>
+                      <Button type="submit" size="lg" disabled={busy || smsCode.length !== 6} className="h-11 w-full text-base font-semibold">
+                        {codeVerifying ? <><Spinner /> Verificando…</> : 'Criar conta'}
+                      </Button>
+                      <Button type="button" variant="ghost" disabled={busy} onClick={() => { setPhoneStep('phone'); setSmsCode(''); }} className="h-10 w-full">
+                        Trocar número
+                      </Button>
+                    </form>
+                  )}
                 </TabsContent>
               </Tabs>
 

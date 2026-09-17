@@ -9,15 +9,22 @@ export interface AuthGuardProps {
   children: ReactNode;
   /**
    * Optional organization the user must belong to. When provided, access is
-   * granted only if `hasOrgAccess(orgId)` returns true.
+   * granted only if the role check passes.
    */
   orgId?: string;
+  /** Papel mínimo na org: member lê, admin escreve. Padrão: member. */
+  requiredRole?: 'admin' | 'member';
 }
 
-export function AuthGuard({ children, orgId }: AuthGuardProps) {
-  const { user, loading, hasOrgAccess } = useAuth();
+export function AuthGuard({ children, orgId, requiredRole = 'member' }: AuthGuardProps) {
+  const { user, loading, isOrgAdmin, isOrgMember } = useAuth();
 
-  const hasAccess = !orgId || (user ? hasOrgAccess(orgId) : false);
+  const hasAccess =
+    !orgId || !user
+      ? Boolean(user)
+      : requiredRole === 'admin'
+        ? isOrgAdmin(orgId)
+        : isOrgMember(orgId);
   const isAuthorized = Boolean(user) && hasAccess;
 
   useEffect(() => {

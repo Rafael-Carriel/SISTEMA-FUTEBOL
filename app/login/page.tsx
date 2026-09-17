@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, type ChangeEvent, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from 'react';
 import {
   GoogleAuthProvider,
   signInWithEmailAndPassword,
@@ -24,6 +24,14 @@ import { Spinner } from '@/components/ui/spinner';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAuth } from '@/lib/auth-context';
 import { auth } from '@/lib/firebase';
+import {
+  getPhoneAuthErrorMessage,
+  initRecaptcha,
+  resetPhoneAuth,
+  sendVerificationCode,
+  validateBrazilianPhone,
+  verifyCode,
+} from '@/lib/phone-auth';
 
 /** Landing spot for authenticated users. */
 const APP_HOME = '/app';
@@ -121,17 +129,24 @@ export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [phone, setPhone] = useState('');
+  const [smsCode, setSmsCode] = useState('');
+  const [phoneStep, setPhoneStep] = useState<'phone' | 'code'>('phone');
+  const [smsSending, setSmsSending] = useState(false);
+  const [codeVerifying, setCodeVerifying] = useState(false);
   const [errors, setErrors] = useState<FieldErrors>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
+  const recaptchaReady = useRef(false);
 
   useEffect(() => {
     if (!loading && user) {
       window.location.replace(APP_HOME);
     }
   }, [loading, user]);
+
+  useEffect(() => () => resetPhoneAuth(), []);
 
   function handleMethodChange(value: Method) {
     setMethod(value);
@@ -189,26 +204,48 @@ export default function LoginPage() {
     }
   }
 
-  function handlePhoneSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handlePhoneSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setFormError(null);
     setNotice(null);
 
-    const digits = phone.replace(/\D/g, '');
-    const nextErrors: FieldErrors = {};
-    if (!digits) nextErrors.phone = 'Informe seu número de celular.';
-    else if (digits.length !== PHONE_LOCAL_LENGTH || digits[2] !== '9')
-      nextErrors.phone = 'Informe um celular válido com DDD, ex.: (11) 99999-9999.';
+    const validation = validateBrazilianPhone(phone);
+    if (!validation.valid || !validation.e164) {
+      setErrors({ phone: validation.error ?? 'Informe um celular válido com DDD.' });
+      return;
+    }
 
-    setErrors(nextErrors);
-    if (Object.keys(nextErrors).length > 0) return;
-
-    // Phone authentication is UI-only for now. The reCAPTCHA verifier and SMS
-    // flow land in a follow-up, so we surface an informative notice instead.
-    setNotice('O acesso por telefone estará disponível em breve.');
+    setSmsSending(true);
+    try {
+      if (!recaptchaReady.current) {
+        initRecaptcha('recaptcha-container-login');
+        recaptchaReady.current = true;
+      }
+      await sendVerificationCode(validation.e164);
+      setPhoneStep('code');
+      setNotice(`Código enviado para ${validation.formatted}.`);
+    } catch (error) {
+      setFormError(getPhoneAuthErrorMessage(error));
+    } finally {
+      setSmsSending(false);
+    }
   }
 
-  const busy = submitting || googleLoading;
+  async function handleCodeSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setFormError(null);
+    setCodeVerifying(true);
+    try {
+      await verifyCode(smsCode);
+      window.location.assign(APP_HOME);
+    } catch (error) {
+      setFormError(getPhoneAuthErrorMessage(error));
+    } finally {
+      setCodeVerifying(false);
+    }
+  }
+
+  const busy = submitting || googleLoading || smsSending || codeVerifying;
 
   if (loading && !user) {
     return (
@@ -399,55 +436,86 @@ export default function LoginPage() {
                 </TabsContent>
 
                 <TabsContent value="phone" className="mt-4">
-                  <form onSubmit={handlePhoneSubmit} noValidate className="space-y-4">
-                    <div className="space-y-1.5">
-                      <Label htmlFor="phone">Celular</Label>
-                      <div className="flex items-stretch">
-                        <span className="inline-flex items-center gap-1.5 rounded-l-lg border border-r-0 border-input bg-muted px-3 text-sm font-bold text-muted-foreground">
-                          <Phone className="size-4" />
-                          +55
-                        </span>
+                  {phoneStep === 'phone' ? (
+                    <form onSubmit={handlePhoneSubmit} noValidate className="space-y-4">
+                      <div className="space-y-1.5">
+                        <Label htmlFor="phone">Celular</Label>
+                        <div className="flex items-stretch">
+                          <span className="inline-flex items-center gap-1.5 rounded-l-lg border border-r-0 border-input bg-muted px-3 text-sm font-bold text-muted-foreground">
+                            <Phone className="size-4" />
+                            +55
+                          </span>
+                          <Input
+                            id="phone"
+                            type="tel"
+                            inputMode="numeric"
+                            autoComplete="tel-national"
+                            placeholder="(11) 99999-9999"
+                            value={phone}
+                            onChange={handlePhoneChange}
+                            aria-invalid={Boolean(errors.phone)}
+                            aria-describedby={errors.phone ? 'phone-error' : undefined}
+                            disabled={busy}
+                            className="h-11 rounded-l-none"
+                          />
+                        </div>
+                        {errors.phone ? (
+                          <p id="phone-error" className="text-xs font-medium text-destructive">
+                            {errors.phone}
+                          </p>
+                        ) : null}
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <Label>Verificação de segurança</Label>
+                        <div
+                          id="recaptcha-container-login"
+                          className="flex min-h-10 items-center justify-center rounded-xl border border-dashed border-border bg-muted/40 px-4 py-3 text-center"
+                        >
+                          <p className="text-xs font-semibold text-muted-foreground">
+                            Protegido por reCAPTCHA invisível.
+                          </p>
+                        </div>
+                      </div>
+
+                      <Button type="submit" size="lg" disabled={busy} className="h-11 w-full text-base font-semibold">
+                        {smsSending ? (
+                          <><Spinner /> Enviando…</>
+                        ) : (
+                          'Receber código por SMS'
+                        )}
+                      </Button>
+                    </form>
+                  ) : (
+                    <form onSubmit={handleCodeSubmit} noValidate className="space-y-4">
+                      <div className="space-y-1.5">
+                        <Label htmlFor="sms-code">Código SMS</Label>
                         <Input
-                          id="phone"
-                          type="tel"
+                          id="sms-code"
+                          type="text"
                           inputMode="numeric"
-                          autoComplete="tel-national"
-                          placeholder="(11) 99999-9999"
-                          value={phone}
-                          onChange={handlePhoneChange}
-                          aria-invalid={Boolean(errors.phone)}
-                          aria-describedby={errors.phone ? 'phone-error' : undefined}
-                          className="h-11 rounded-l-none"
+                          autoComplete="one-time-code"
+                          placeholder="000000"
+                          maxLength={6}
+                          value={smsCode}
+                          onChange={(e) => setSmsCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                          disabled={busy}
+                          className="h-11 text-center text-lg font-bold tracking-[.3em]"
                         />
+                        <p className="text-xs text-muted-foreground">Enviamos um código de 6 dígitos por SMS.</p>
                       </div>
-                      {errors.phone ? (
-                        <p id="phone-error" className="text-xs font-medium text-destructive">
-                          {errors.phone}
-                        </p>
-                      ) : null}
-                    </div>
-
-                    <div className="space-y-1.5">
-                      <Label htmlFor="recaptcha-container">Verificação de segurança</Label>
-                      <div
-                        id="recaptcha-container"
-                        className="flex min-h-20 items-center justify-center rounded-xl border border-dashed border-border bg-muted/40 px-4 py-5 text-center"
-                      >
-                        <p className="text-xs font-semibold text-muted-foreground">
-                          reCAPTCHA será exibido aqui quando o acesso por telefone for ativado.
-                        </p>
-                      </div>
-                    </div>
-
-                    <Button
-                      type="submit"
-                      size="lg"
-                      disabled={busy}
-                      className="h-11 w-full text-base font-semibold"
-                    >
-                      Receber código por SMS
-                    </Button>
-                  </form>
+                      <Button type="submit" size="lg" disabled={busy || smsCode.length !== 6} className="h-11 w-full text-base font-semibold">
+                        {codeVerifying ? (
+                          <><Spinner /> Verificando…</>
+                        ) : (
+                          'Entrar'
+                        )}
+                      </Button>
+                      <Button type="button" variant="ghost" disabled={busy} onClick={() => { setPhoneStep('phone'); setSmsCode(''); }} className="h-10 w-full">
+                        Trocar número
+                      </Button>
+                    </form>
+                  )}
                 </TabsContent>
               </Tabs>
 

@@ -18,6 +18,7 @@ export type Player = {
   isAvulso?: boolean;
   matchId?: string;
   avulsoValue?: number;
+  orgId?: string;
 };
 
 export type MatchEventType = 'goal' | 'save' | 'frango' | 'yellow' | 'red' | 'substitution';
@@ -58,6 +59,7 @@ export type Match = {
   startedAt?: string;
   goalkeeperAId?: string;
   goalkeeperBId?: string;
+  orgId?: string;
 };
 
 export type Payment = {
@@ -67,6 +69,7 @@ export type Payment = {
   amount: number;
   paid: boolean;
   paidAt?: string;
+  orgId?: string;
 };
 
 export type PlayerStats = {
@@ -88,4 +91,47 @@ export type LineupExportOptions = {
   height?: number;
   includeNames?: boolean;
   includeNumbers?: boolean;
+};
+
+export type Role = 'admin' | 'member';
+
+export type User = {
+  id: string;
+  email: string;
+  displayName: string;
+  photoUrl?: string | null;
+  phone?: string | null;
+  createdAt: string;
+};
+
+export type Organization = {
+  id: string;
+  name: string;
+  slug: string;
+  createdAt: string;
+  createdBy: string;
+  sport?: string;
+  city?: string;
+};
+
+export type Member = {
+  userId: string;
+  orgId: string;
+  role: Role;
+  joinedAt: string;
+  displayName?: string;
+  email?: string | null;
+  phone?: string | null;
+};
+
+export type Invite = {
+  id: string;
+  email: string;
+  role: Role;
+  code: string;
+  expiresAt: string;
+  orgId: string;
+  orgName: string;
+  createdAt: string;
+  status?: 'pending' | 'accepted' | 'revoked';
 };

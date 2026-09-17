@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { arrayUnion, collection, deleteDoc, deleteField, doc, getDocs, increment, onSnapshot, setDoc, updateDoc, writeBatch } from 'firebase/firestore';
+import { arrayUnion, collection, deleteDoc, deleteField, doc, getDocs, increment, onSnapshot, query, setDoc, updateDoc, where, writeBatch } from 'firebase/firestore';
 import { Activity, BadgeDollarSign, CalendarDays, Camera, Check, ChevronRight, CircleDollarSign, Download, Expand, Frown, Goal, ImageDown, LayoutDashboard, Medal, Menu, Monitor, Moon, Pencil, Plus, RectangleVertical, Repeat, Save, Shield, ShieldCheck, Shirt, Sparkles, Sun, Swords, Target, Trash2, Trophy, UserPlus, Users, WalletCards, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -114,7 +114,9 @@ function EventIcon({ event }: { event: MatchEvent }) {
 /* ═══════════════════════════════════════════
    MAIN APP
    ═══════════════════════════════════════════ */
-export function FutApp() {
+export function FutApp({ orgId }: { orgId?: string }) {
+  /** Anexa orgId aos documentos criados quando o painel está escopado a um futebol. */
+  const withOrg = <T extends object>(data: T): T => (orgId ? { ...data, orgId } : data);
   const [view, setView] = useState<View>('dashboard');
   const [players, setPlayers] = useState<Player[]>(demoPlayers);
   const [matches, setMatches] = useState<Match[]>(demoMatches);
@@ -171,6 +173,19 @@ export function FutApp() {
 
   /* ─── Firebase realtime ─── */
   useEffect(() => {
+    // Modo escopado (painel do futebol): lê só os docs da org, sem seed de demo.
+    if (orgId) {
+      const qPlayers = query(collection(db, 'players'), where('orgId', '==', orgId));
+      const qMatches = query(collection(db, 'matches'), where('orgId', '==', orgId));
+      const qPayments = query(collection(db, 'payments'), where('orgId', '==', orgId));
+      setConnection('connecting');
+      const unsubscribers = [
+        onSnapshot(qPlayers, (snap) => { setPlayers(dedupePlayerRecords(snap.docs.map((item) => ({ ...item.data(), id: item.id }) as Player)).sort((a, b) => a.nickname.localeCompare(b.nickname))); setConnection('online'); }, () => setConnection('demo')),
+        onSnapshot(qMatches, (snap) => setMatches(snap.docs.map((item) => normalizeMatchTeams(({ ...item.data(), id: item.id }) as Match)).sort((a, b) => `${b.date}${b.time}`.localeCompare(`${a.date}${a.time}`)))),
+        onSnapshot(qPayments, (snap) => setPayments(snap.docs.map((item) => ({ ...item.data(), id: item.id }) as Payment))),
+      ];
+      return () => unsubscribers.forEach((unsubscribe) => unsubscribe());
+    }
     const unsubscribers: (() => void)[] = [];
     let cancelled = false;
     async function connect() {
@@ -193,7 +208,7 @@ export function FutApp() {
     }
     connect();
     return () => { cancelled = true; unsubscribers.forEach((unsubscribe) => unsubscribe()); };
-  }, []);
+  }, [orgId]);
   useEffect(() => { if (!notice) return; const timer = window.setTimeout(() => setNotice(''), 2800); return () => window.clearTimeout(timer); }, [notice]);
 
   /* ─── derived state ─── */
@@ -262,7 +277,7 @@ export function FutApp() {
     if (!playerForm.name.trim()) return showNotice('Digite o nome do jogador.');
     const id = crypto.randomUUID(), nickname = playerForm.nickname.trim() || playerForm.name.trim().split(' ')[0];
     const player: Player = { id, name: playerForm.name.trim(), nickname, number: Number(playerForm.number) || 0, position: playerForm.position, photoUrl: playerForm.photoUrl || undefined, pace: 70, shooting: playerForm.position === 'ATA' ? 75 : 65, passing: playerForm.position === 'MEI' ? 75 : 68, defending: ['GOL', 'ZAG'].includes(playerForm.position) ? 78 : 58, physical: 70, createdAt: new Date().toISOString() };
-    try { await setDoc(doc(db, 'players', id), player); await setDoc(doc(db, 'payments', `${monthKey}_${id}`), { id: `${monthKey}_${id}`, playerId: id, month: monthKey, amount: 40, paid: false }); } catch { setPlayers((all) => [...all, player]); }
+    try { await setDoc(doc(db, 'players', id), withOrg(player)); await setDoc(doc(db, 'payments', `${monthKey}_${id}`), withOrg({ id: `${monthKey}_${id}`, playerId: id, month: monthKey, amount: 40, paid: false })); } catch { setPlayers((all) => [...all, player]); }
     setDialog(null); setPlayerForm({ name: '', nickname: '', number: '10', position: 'ATA', photoUrl: '' }); showNotice(`${nickname} entrou para o elenco.`);
   }
 
@@ -298,7 +313,7 @@ export function FutApp() {
         format: matchForm.format,
         fieldPositions: hasPositions ? dragPositions : undefined,
       };
-      try { await setDoc(doc(db, 'matches', id), match); } catch { setMatches((all) => [match, ...all]); }
+      try { await setDoc(doc(db, 'matches', id), withOrg(match)); } catch { setMatches((all) => [match, ...all]); }
       setActiveMatchId(id); setDialog(null); setPreviewTeams(null); setDragPositions({}); setView('matches'); showNotice('Partida criada com times equilibrados.');
     }
   }
@@ -341,7 +356,7 @@ export function FutApp() {
     const paid = !current?.paid;
     const next: Payment = { id, playerId: player.id, month: paymentMonth, amount: current?.amount ?? monthlyValue, paid, paidAt: paid ? new Date().toISOString() : undefined };
     setPayments((all) => (all.some((item) => item.id === id) ? all.map((item) => (item.id === id ? next : item)) : [...all, next]));
-    try { await setDoc(doc(db, 'payments', id), next); } catch { /* offline: local state already updated */ }
+    try { await setDoc(doc(db, 'payments', id), withOrg(next)); } catch { /* offline: local state already updated */ }
     showNotice(paid ? `${player.nickname} está em dia.` : `${player.nickname} voltou para pendente.`);
   }
 
@@ -350,7 +365,7 @@ export function FutApp() {
     const current = payments.find((item) => item.id === id);
     const next: Payment = { id, playerId: player.id, month: paymentMonth, amount, paid: current?.paid ?? false, paidAt: current?.paidAt };
     setPayments((all) => (all.some((item) => item.id === id) ? all.map((item) => (item.id === id ? next : item)) : [...all, next]));
-    try { await setDoc(doc(db, 'payments', id), next); } catch { /* offline */ }
+    try { await setDoc(doc(db, 'payments', id), withOrg(next)); } catch { /* offline */ }
   }
 
   async function addAvulso(): Promise<string | null> {
@@ -367,8 +382,8 @@ export function FutApp() {
     };
     const payment: Payment = { id: `${paymentMonth}_${id}`, playerId: id, month: paymentMonth, amount: avulsoValue, paid: false };
     try {
-      await setDoc(doc(db, 'players', id), avulsoPlayer);
-      await setDoc(doc(db, 'payments', payment.id), payment);
+      await setDoc(doc(db, 'players', id), withOrg(avulsoPlayer));
+      await setDoc(doc(db, 'payments', payment.id), withOrg(payment));
     } catch { /* offline */ }
     setPlayers((all) => [...all, avulsoPlayer]);
     setPayments((all) => [...all, payment]);
