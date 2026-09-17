@@ -15,16 +15,7 @@ service cloud.firestore {
       return isSignedIn() && request.auth.uid == userId;
     }
 
-    // Gate multi-tenant: custom claim organizations OU doc de membro.
-    //   organizations: { "<orgId>": "admin" | "member" }
-    // O lookup em members permite operar sem Cloud Functions.
-    function hasClaimAccess(orgId, allowedRoles) {
-      return isSignedIn()
-        && request.auth.token.organizations is map
-        && request.auth.token.organizations.keys().hasAny([orgId])
-        && request.auth.token.organizations[orgId] in allowedRoles;
-    }
-
+    // Membership documents are the source of truth for each group.
     function memberRole(orgId) {
       return exists(/databases/$(database)/documents/organizations/$(orgId)/members/$(request.auth.uid))
         ? get(/databases/$(database)/documents/organizations/$(orgId)/members/$(request.auth.uid)).data.role
@@ -36,14 +27,7 @@ service cloud.firestore {
     }
 
     function hasOrgAccess(orgId, allowedRoles) {
-      return hasClaimAccess(orgId, allowedRoles) || hasMemberAccess(orgId, allowedRoles);
-    }
-
-    // Janela de transição: documentos legados sem orgId continuam acessíveis
-    // pelo prazo original da regra aberta, para não quebrar o app durante a
-    // migração. Depois de 01/10/2026 todo documento precisa ser org-scoped.
-    function isTransitionWindow() {
-      return request.time < timestamp.date(2026, 10, 1);
+      return hasMemberAccess(orgId, allowedRoles);
     }
 
     function isOrgScoped(data) {
@@ -51,16 +35,14 @@ service cloud.firestore {
     }
 
     // Leitura: admin + member. Escrita: só admin.
-    // Documentos legados (sem orgId) seguem a janela de transição.
+    // Dados sem orgId precisam ser migrados antes de receber acesso.
 
     function canReadOrgData(data) {
-      return (isOrgScoped(data) && hasOrgAccess(data.orgId, ['admin', 'member']))
-        || (!isOrgScoped(data) && isTransitionWindow());
+      return isOrgScoped(data) && hasOrgAccess(data.orgId, ['admin', 'member']);
     }
 
     function canWriteOrgData(data) {
-      return (isOrgScoped(data) && hasOrgAccess(data.orgId, ['admin']))
-        || (!isOrgScoped(data) && isTransitionWindow());
+      return isOrgScoped(data) && hasOrgAccess(data.orgId, ['admin']);
     }
 
     // =====================================================================
@@ -68,16 +50,24 @@ service cloud.firestore {
     // =====================================================================
 
     match /organizations/{orgId} {
-      allow read: if hasOrgAccess(orgId, ['admin', 'member']);
+      // Leitura liberada p/ logado: necessário p/ checar slug (getDoc)
+      // e listar meus futs (list). Dados sensíveis seguem em members/invites.
+      allow get: if isSignedIn();
+      allow list: if isSignedIn();
 
       // Bootstrap: usuário autenticado pode criar a própria organização.
       // Exige slug + name + createdBy == uid para evitar docs vazios.
       allow create: if isSignedIn()
         && request.resource.data.createdBy == request.auth.uid
         && request.resource.data.name is string
-        && request.resource.data.slug is string;
+        && request.resource.data.slug == orgId
+        && request.resource.data.name.size() >= 2
+        && getAfter(/databases/$(database)/documents/organizations/$(orgId)/members/$(request.auth.uid)).data.role == 'admin';
 
-      allow update, delete: if hasOrgAccess(orgId, ['admin']);
+      allow update: if hasOrgAccess(orgId, ['admin'])
+        && request.resource.data.createdBy == resource.data.createdBy
+        && request.resource.data.slug == resource.data.slug;
+      allow delete: if false;
     }
 
     // =====================================================================
@@ -87,19 +77,45 @@ service cloud.firestore {
     match /organizations/{orgId}/members/{userId} {
       allow read: if hasOrgAccess(orgId, ['admin', 'member']) || isSelf(userId);
 
-      // Escrita somente admin. Exceção: o criador da org pode registrar a si
-      // mesmo como admin durante o bootstrap.
-      allow create: if (hasOrgAccess(orgId, ['admin'])
-        && request.resource.data.role in ['admin', 'member'])
-        || (isSelf(userId)
-            && request.resource.data.userId == request.auth.uid
-            && request.resource.data.role == 'admin'
-            && get(/databases/$(database)/documents/organizations/$(orgId)).data.createdBy == request.auth.uid);
+      function validMember() {
+        return request.resource.data.userId == userId
+          && request.resource.data.orgId == orgId
+          && request.resource.data.role in ['admin', 'member'];
+      }
+      function isOwner() {
+        return get(/databases/$(database)/documents/organizations/$(orgId)).data.createdBy == userId;
+      }
+      function validCode() {
+        let code = request.resource.data.joinCode;
+        let invite = get(/databases/$(database)/documents/groupCodes/$(code)).data;
+        return invite.orgId == orgId && invite.expiresAt > request.time;
+      }
+      allow create: if isSignedIn() && validMember() && (
+        hasOrgAccess(orgId, ['admin'])
+        || (isSelf(userId) && request.resource.data.role == 'admin'
+          && getAfter(/databases/$(database)/documents/organizations/$(orgId)).data.createdBy == request.auth.uid)
+        || (isSelf(userId) && request.resource.data.role == 'member' && validCode())
+      );
+      allow update: if hasOrgAccess(orgId, ['admin']) && validMember()
+        && (!isOwner() || request.resource.data.role == 'admin');
+      allow delete: if hasOrgAccess(orgId, ['admin']) && !isOwner();
+    }
 
-      // Admin pode trocar papel; nunca permitir que o último admin saia (validação no client).
-      allow update: if hasOrgAccess(orgId, ['admin'])
-        && request.resource.data.role in ['admin', 'member'];
-      allow delete: if hasOrgAccess(orgId, ['admin']);
+    match /organizations/{orgId}/settings/{settingId} {
+      allow read, write: if hasOrgAccess(orgId, ['admin']);
+    }
+
+    match /groupCodes/{code} {
+      allow get: if isSignedIn();
+      allow list: if false;
+      allow create: if isSignedIn()
+        && code.matches('^[A-F0-9]{12}$')
+        && request.resource.data.keys().hasOnly(['orgId', 'expiresAt'])
+        && hasOrgAccess(request.resource.data.orgId, ['admin'])
+        && request.resource.data.expiresAt > request.time
+        && request.resource.data.expiresAt <= request.time + duration.value(7, 'd');
+      allow update: if false;
+      allow delete: if hasOrgAccess(resource.data.orgId, ['admin']);
     }
 
     // =====================================================================
@@ -123,21 +139,21 @@ service cloud.firestore {
     match /players/{playerId} {
       allow read: if canReadOrgData(resource.data);
       allow create: if canWriteOrgData(request.resource.data);
-      allow update: if canWriteOrgData(resource.data) && canWriteOrgData(request.resource.data);
+      allow update: if canWriteOrgData(resource.data) && request.resource.data.orgId == resource.data.orgId;
       allow delete: if canWriteOrgData(resource.data);
     }
 
     match /matches/{matchId} {
       allow read: if canReadOrgData(resource.data);
       allow create: if canWriteOrgData(request.resource.data);
-      allow update: if canWriteOrgData(resource.data) && canWriteOrgData(request.resource.data);
+      allow update: if canWriteOrgData(resource.data) && request.resource.data.orgId == resource.data.orgId;
       allow delete: if canWriteOrgData(resource.data);
     }
 
     match /payments/{paymentId} {
       allow read: if canReadOrgData(resource.data);
       allow create: if canWriteOrgData(request.resource.data);
-      allow update: if canWriteOrgData(resource.data) && canWriteOrgData(request.resource.data);
+      allow update: if canWriteOrgData(resource.data) && request.resource.data.orgId == resource.data.orgId;
       allow delete: if canWriteOrgData(resource.data);
     }
   }

@@ -1,6 +1,6 @@
 'use client';
 
-import { use, useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { collection, getDoc, getDocs, query, where, doc } from 'firebase/firestore';
 import { Goal, ShieldCheck, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -16,14 +16,15 @@ import type { Match, Organization, Player } from '@/lib/fut-types';
 import { getMember } from '@/lib/members';
 import { setCurrentOrg } from '@/lib/organizations';
 
-export default function FutPage({ params }: { params: Promise<{ slug: string }> }) {
-  const { slug } = use(params);
-  const { user, isOrgAdmin } = useAuth();
+export default function FutPage({ params }: { params: { slug: string } }) {
+  const { slug } = params;
+  const { user } = useAuth();
   const [org, setOrg] = useState<Organization | null>(null);
   const [isMember, setIsMember] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
   const [players, setPlayers] = useState<Player[]>([]);
   const [matches, setMatches] = useState<Match[]>([]);
+  const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -34,6 +35,9 @@ export default function FutPage({ params }: { params: Promise<{ slug: string }> 
     if (!user) return;
     (async () => {
       setLoading(true);
+      setError(null);
+      setIsMember(false);
+      setIsAdmin(false);
       try {
         const snap = await getDoc(doc(db, 'organizations', slug));
         if (!snap.exists()) {
@@ -44,7 +48,7 @@ export default function FutPage({ params }: { params: Promise<{ slug: string }> 
         setOrg(data);
         const m = await getMember(slug, user.uid);
         setIsMember(Boolean(m));
-        setIsAdmin(m?.role === 'admin' || isOrgAdmin(slug));
+        setIsAdmin(m?.role === 'admin');
         if (m && m.role !== 'admin') {
           const [p, mt] = await Promise.all([
             getDocs(query(collection(db, 'players'), where('orgId', '==', slug))),
@@ -53,11 +57,13 @@ export default function FutPage({ params }: { params: Promise<{ slug: string }> 
           setPlayers(p.docs.map((d) => d.data() as Player));
           setMatches(mt.docs.map((d) => d.data() as Match));
         }
+      } catch {
+        setError('Não foi possível carregar o futebol. Atualize a página para tentar novamente.');
       } finally {
         setLoading(false);
       }
     })();
-  }, [user, slug, isOrgAdmin]);
+  }, [user, slug]);
 
   const stats = useMemo(() => {
     const goals = new Map<string, number>();
@@ -89,20 +95,20 @@ export default function FutPage({ params }: { params: Promise<{ slug: string }> 
 
         {loading ? (
           <p className="mt-10 flex items-center gap-2 text-sm text-muted-foreground"><Spinner /> Carregando futebol…</p>
-        ) : !org ? (
+        ) : error ? (<p role="alert" className="mt-10 text-destructive">{error}</p>) : !org ? (
           <Card className="mt-10"><CardContent className="p-6 text-sm">Futebol não encontrado.</CardContent></Card>
         ) : !isMember ? (
           <Card className="mt-10">
             <CardHeader><CardTitle>Sem acesso</CardTitle></CardHeader>
             <CardContent className="space-y-3 text-sm text-muted-foreground">
-              <p>Você não está vinculado ao <b className="text-foreground">{org.name}</b>. Peça ao administrador um convite com seu e-mail.</p>
+              <p>Você não está vinculado ao <b className="text-foreground">{org.name}</b>. Peça ao administrador o código de entrada e use a tela Meus futebóis.</p>
               <Button onClick={() => window.location.assign('/app')}>Meus futebóis</Button>
             </CardContent>
           </Card>
         ) : isAdmin ? (
           <main className="mt-6 space-y-6">
             <FutApp orgId={slug} />
-            <MembersPanel orgId={org.id} orgName={org.name} />
+            <MembersPanel orgId={org.id} ownerId={org.createdBy} />
           </main>
         ) : (
           <main className="mt-8 space-y-6">

@@ -115,10 +115,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     (orgId: string): boolean => {
       if (!orgId) return false;
       if (orgRole(orgId) === 'admin') return true;
-      // Legado: admin global acessa qualquer org.
-      return isAdmin();
+      return false;
     },
-    [orgRole, isAdmin],
+    [orgRole],
   );
 
   const isOrgMember = useCallback(
@@ -126,11 +125,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!orgId) return false;
       const role = orgRole(orgId);
       if (role === 'admin' || role === 'member') return true;
-      if (isAdmin()) return true;
       if (claims?.orgId === orgId) return true;
       return readClaimArray(claims, 'orgs').includes(orgId);
     },
-    [orgRole, claims, isAdmin],
+    [orgRole, claims],
   );
 
   const hasOrgAccess = useCallback(

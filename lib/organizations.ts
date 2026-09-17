@@ -23,6 +23,15 @@ function uniqueSuffix(base: string, attempt: number): string {
   return attempt <= 1 ? base : `${base}-${attempt}`;
 }
 
+function toFriendlyOrgError(e: unknown): Error {
+  const code = typeof e === 'object' && e !== null && 'code' in e ? String((e as { code?: unknown }).code ?? '') : '';
+  const msg = e instanceof Error ? e.message : String(e ?? '');
+  if (code === 'permission-denied' || /missing or insufficient permissions/i.test(msg)) {
+    return new Error('Não foi possível criar o futebol. Tente novamente ou fale com o suporte.');
+  }
+  return e instanceof Error ? e : new Error('Não foi possível criar o futebol.');
+}
+
 /** Cria a org (doc-id = slug) + registra o criador como admin, de forma atômica. */
 export async function createOrganization(
   name: string,
@@ -34,11 +43,15 @@ export async function createOrganization(
   if (!base) throw new Error('Não foi possível gerar o link do futebol.');
 
   let slug = base;
-  for (let attempt = 1; attempt <= 20; attempt += 1) {
-    slug = uniqueSuffix(base, attempt);
-    const existing = await getDoc(doc(db, 'organizations', slug));
-    if (!existing.exists()) break;
-    if (attempt === 20) throw new Error('Tente outro nome para o futebol.');
+  try {
+    for (let attempt = 1; attempt <= 20; attempt += 1) {
+      slug = uniqueSuffix(base, attempt);
+      const existing = await getDoc(doc(db, 'organizations', slug));
+      if (!existing.exists()) break;
+      if (attempt === 20) throw new Error('Tente outro nome para o futebol.');
+    }
+  } catch (e) {
+    throw toFriendlyOrgError(e);
   }
 
   const now = new Date().toISOString();
@@ -62,7 +75,11 @@ export async function createOrganization(
   const batch = writeBatch(db);
   batch.set(doc(db, 'organizations', slug), org);
   batch.set(doc(db, 'organizations', slug, 'members', fbUser.uid), member);
-  await batch.commit();
+  try {
+    await batch.commit();
+  } catch (e) {
+    throw toFriendlyOrgError(e);
+  }
   setCurrentOrg(slug);
   return org;
 }

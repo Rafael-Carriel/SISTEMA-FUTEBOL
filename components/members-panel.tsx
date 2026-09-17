@@ -1,23 +1,22 @@
 'use client';
 
-import { useCallback, useEffect, useState, type FormEvent } from 'react';
-import { ShieldCheck, Trash2, UserPlus } from 'lucide-react';
+import { useCallback, useEffect, useState } from 'react';
+import { ShieldCheck, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+import { doc, getDoc } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
+import { generateGroupCode } from '@/lib/group-access';
 import { Spinner } from '@/components/ui/spinner';
 import type { Member, Role } from '@/lib/fut-types';
 import {
-  inviteMember,
   listMembers,
   removeMember,
   updateMemberRole,
 } from '@/lib/members';
 
-export function MembersPanel({ orgId, orgName }: { orgId: string; orgName: string }) {
+export function MembersPanel({ orgId, ownerId }: { orgId: string; ownerId: string }) {
   const [members, setMembers] = useState<Member[]>([]);
-  const [email, setEmail] = useState('');
-  const [role, setRole] = useState<Role>('member');
+  const [code, setCode] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -27,6 +26,8 @@ export function MembersPanel({ orgId, orgName }: { orgId: string; orgName: strin
     setLoading(true);
     try {
       setMembers(await listMembers(orgId));
+      const access = await getDoc(doc(db, 'organizations', orgId, 'settings', 'access'));
+      setCode(access.data()?.joinCode ?? '');
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Não foi possível carregar membros.');
     } finally {
@@ -38,20 +39,13 @@ export function MembersPanel({ orgId, orgName }: { orgId: string; orgName: strin
     refresh();
   }, [refresh]);
 
-  async function handleInvite(e: FormEvent) {
-    e.preventDefault();
-    setError(null);
-    setOk(null);
-    setSaving(true);
+  async function handleCode() {
+    setSaving(true); setError(null); setOk(null);
     try {
-      await inviteMember(orgId, orgName, email, role);
-      setEmail('');
-      setOk(`Convite ${role === 'admin' ? 'de administrador' : 'de jogador'} criado para ${email.trim()}.`);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Não foi possível convidar.');
-    } finally {
-      setSaving(false);
-    }
+      setCode(await generateGroupCode(orgId));
+      setOk('Código válido por 7 dias. Compartilhe com a galera. O código anterior foi desativado.');
+    } catch { setError('Não foi possível gerar o código. Tente novamente.'); }
+    finally { setSaving(false); }
   }
 
   if (loading) {
@@ -71,37 +65,12 @@ export function MembersPanel({ orgId, orgName }: { orgId: string; orgName: strin
       {error ? <p className="text-sm font-semibold text-destructive">{error}</p> : null}
       {ok ? <p className="text-sm font-semibold text-brand-ink">{ok}</p> : null}
 
-      <form onSubmit={handleInvite} className="grid gap-3 sm:grid-cols-[1fr_150px_auto]">
-        <div className="space-y-1.5">
-          <Label htmlFor="invite-email">E-mail do convite</Label>
-          <Input
-            id="invite-email"
-            type="email"
-            placeholder="jogador@email.com"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            className="h-10"
-          />
-        </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="invite-role">Papel</Label>
-          <select
-            id="invite-role"
-            value={role}
-            onChange={(e) => setRole(e.target.value as Role)}
-            className="h-10 w-full rounded-lg border border-input bg-background px-3 text-sm font-semibold"
-          >
-            <option value="member">Jogador (só vê)</option>
-            <option value="admin">Administrador</option>
-          </select>
-        </div>
-        <div className="flex items-end">
-          <Button type="submit" disabled={saving || !email.trim()} className="h-10">
-            {saving ? <Spinner /> : <UserPlus className="size-4" />}
-            Convidar
-          </Button>
-        </div>
-      </form>
+      <div className="space-y-3 rounded-xl border border-border p-4">
+        <p className="text-sm text-muted-foreground">Compartilhe o código para entrar como jogador, com acesso de consulta. Depois, você pode promover um membro a administrador abaixo.</p>
+        {code ? <p className="select-all font-mono text-xl font-bold tracking-widest">{code}</p> : null}
+        <Button onClick={handleCode} disabled={saving}>{saving ? <Spinner /> : null}{code ? 'Substituir código (revoga o anterior)' : 'Gerar código de entrada'}</Button>
+        <p className="text-xs text-muted-foreground">Na tela Meus futebóis, escolha Entrar com código. O cadastro no elenco é separado do acesso à conta.</p>
+      </div>
 
       <ul className="divide-y divide-border">
         {members.map((m) => (
@@ -109,11 +78,12 @@ export function MembersPanel({ orgId, orgName }: { orgId: string; orgName: strin
             <div className="min-w-0 flex-1">
               <p className="truncate text-sm font-bold">{m.displayName || m.email || m.userId}</p>
               <p className="text-xs text-muted-foreground">
-                {m.role === 'admin' ? 'Administrador — edita tudo' : 'Jogador — só consulta'}
+                {m.userId === ownerId ? 'Responsável — administrador permanente' : m.role === 'admin' ? 'Administrador — edita tudo' : 'Jogador — só consulta'}
               </p>
             </div>
             <select
               aria-label="Trocar papel"
+              disabled={m.userId === ownerId}
               value={m.role}
               onChange={async (e) => {
                 setError(null);
@@ -130,6 +100,8 @@ export function MembersPanel({ orgId, orgName }: { orgId: string; orgName: strin
               <option value="admin">Admin</option>
             </select>
             <Button
+              disabled={m.userId === ownerId}
+              aria-label="Remover membro"
               variant="ghost"
               size="lg"
               className="h-9 px-2 text-destructive"

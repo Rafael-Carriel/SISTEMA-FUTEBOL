@@ -8,7 +8,6 @@ import {
 } from 'firebase/auth';
 import {
   ArrowLeft,
-  Building2,
   Check,
   Goal,
   Phone,
@@ -29,11 +28,9 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { Spinner } from '@/components/ui/spinner';
-import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAuth } from '@/lib/auth-context';
 import { auth } from '@/lib/firebase';
-import { createOrganization } from '@/lib/organizations';
 import {
   getPhoneAuthErrorMessage,
   initRecaptcha,
@@ -49,12 +46,10 @@ const LOGIN_PATH = '/login';
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const MIN_PASSWORD_LENGTH = 6;
-const MIN_ORG_NAME_LENGTH = 2;
 const PHONE_LOCAL_LENGTH = 11;
 
 type Method = 'email' | 'phone';
 type FieldErrors = {
-  org?: string;
   email?: string;
   password?: string;
   confirmPassword?: string;
@@ -62,7 +57,7 @@ type FieldErrors = {
 };
 
 const perks: string[] = [
-  'Crie a organização do grupo em poucos segundos',
+  'Uma conta para participar de vários futebóis',
   'Convide a galera e monte o elenco com cartinhas',
   'Placar ao vivo, rankings e caixa sempre em dia',
 ];
@@ -139,8 +134,6 @@ export default function RegisterPage() {
   const { user, loading } = useAuth();
 
   const [method, setMethod] = useState<Method>('email');
-  const [isFirstUser, setIsFirstUser] = useState(false);
-  const [orgName, setOrgName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -171,14 +164,6 @@ export default function RegisterPage() {
     setNotice(null);
   }
 
-  function handleFirstUserChange(checked: boolean) {
-    setIsFirstUser(checked);
-    if (!checked) {
-      setOrgName('');
-      if (errors.org) setErrors((prev) => ({ ...prev, org: undefined }));
-    }
-  }
-
   function handlePhoneChange(event: ChangeEvent<HTMLInputElement>) {
     setPhone(formatPhone(event.target.value));
     if (errors.phone) setErrors((prev) => ({ ...prev, phone: undefined }));
@@ -190,14 +175,8 @@ export default function RegisterPage() {
     setNotice(null);
 
     const trimmedEmail = email.trim();
-    const trimmedOrg = orgName.trim();
     const nextErrors: FieldErrors = {};
 
-    if (isFirstUser) {
-      if (!trimmedOrg) nextErrors.org = 'Informe o nome da organização.';
-      else if (trimmedOrg.length < MIN_ORG_NAME_LENGTH)
-        nextErrors.org = `Use ao menos ${MIN_ORG_NAME_LENGTH} caracteres.`;
-    }
 
     if (!trimmedEmail) nextErrors.email = 'Informe seu e-mail.';
     else if (!EMAIL_PATTERN.test(trimmedEmail)) nextErrors.email = 'Informe um e-mail válido.';
@@ -215,17 +194,7 @@ export default function RegisterPage() {
 
     setSubmitting(true);
     try {
-      const cred = await createUserWithEmailAndPassword(auth, trimmedEmail, password);
-      if (isFirstUser && trimmedOrg) {
-        try {
-          const org = await createOrganization(trimmedOrg, cred.user);
-          window.location.assign(`/f/${org.slug}`);
-          return;
-        } catch (orgError) {
-          setFormError(orgError instanceof Error ? orgError.message : 'Conta criada, mas não foi possível criar o futebol.');
-          return;
-        }
-      }
+      await createUserWithEmailAndPassword(auth, trimmedEmail, password);
       window.location.assign(APP_HOME);
     } catch (error) {
       setFormError(authErrorMessage(error));
@@ -237,25 +206,11 @@ export default function RegisterPage() {
   async function handleGoogleSignIn() {
     setFormError(null);
     setNotice(null);
-    if (isFirstUser && orgName.trim().length < 2) {
-      setErrors({ org: 'Informe o nome do futebol para criar.' });
-      return;
-    }
     setGoogleLoading(true);
     try {
       const provider = new GoogleAuthProvider();
       provider.setCustomParameters({ prompt: 'select_account' });
-      const cred = await signInWithPopup(auth, provider);
-      if (isFirstUser && orgName.trim()) {
-        try {
-          const org = await createOrganization(orgName.trim(), cred.user);
-          window.location.assign(`/f/${org.slug}`);
-          return;
-        } catch (orgError) {
-          setFormError(orgError instanceof Error ? orgError.message : 'Conta criada, mas não foi possível criar o futebol.');
-          return;
-        }
-      }
+      await signInWithPopup(auth, provider);
       window.location.assign(APP_HOME);
     } catch (error) {
       setFormError(authErrorMessage(error));
@@ -269,10 +224,6 @@ export default function RegisterPage() {
     setFormError(null);
     setNotice(null);
 
-    if (isFirstUser && orgName.trim().length < 2) {
-      setErrors({ org: 'Informe o nome do futebol para criar.' });
-      return;
-    }
     const validation = validateBrazilianPhone(phone);
     if (!validation.valid || !validation.e164) {
       setErrors({ phone: validation.error ?? 'Informe um celular válido com DDD.' });
@@ -300,17 +251,7 @@ export default function RegisterPage() {
     setFormError(null);
     setCodeVerifying(true);
     try {
-      const cred = await verifyCode(smsCode);
-      if (isFirstUser && orgName.trim()) {
-        try {
-          const org = await createOrganization(orgName.trim(), cred.user);
-          window.location.assign(`/f/${org.slug}`);
-          return;
-        } catch (orgError) {
-          setFormError(orgError instanceof Error ? orgError.message : 'Conta criada, mas não foi possível criar o futebol.');
-          return;
-        }
-      }
+      await verifyCode(smsCode);
       window.location.assign(APP_HOME);
     } catch (error) {
       setFormError(getPhoneAuthErrorMessage(error));
@@ -367,7 +308,7 @@ export default function RegisterPage() {
             </span>
             <h1 className="mt-6 text-4xl font-black leading-[1.05] tracking-[-.04em] xl:text-5xl">
               Crie sua conta.
-              <span className="block text-brand-ink">E organize o fut da galera.</span>
+              <span className="block text-brand-ink">Participe do fut da galera.</span>
             </h1>
             <p className="mt-5 max-w-md text-base leading-relaxed text-muted-foreground">
               Monte o elenco, sorteie times equilibrados e acompanhe placar, rankings e caixa com a
@@ -398,7 +339,7 @@ export default function RegisterPage() {
           <Card className="w-full rounded-[26px] shadow-[0_24px_70px_rgba(10,25,14,.10)]">
             <CardHeader>
               <CardTitle className="text-2xl font-black tracking-tight">Criar conta</CardTitle>
-              <CardDescription>Cadastre-se com e-mail, Google ou telefone.</CardDescription>
+              <CardDescription>Primeiro, sua conta. Depois, crie seu futebol ou entre com um código.</CardDescription>
             </CardHeader>
 
             <CardContent className="space-y-5">
@@ -432,54 +373,6 @@ export default function RegisterPage() {
 
                 <TabsContent value="email" className="mt-4">
                   <form onSubmit={handleEmailSubmit} noValidate className="space-y-4">
-                    <div className="flex items-start justify-between gap-4 rounded-xl border border-border bg-muted/40 p-3">
-                      <div className="space-y-0.5">
-                        <Label htmlFor="first-user" className="text-sm font-semibold">
-                          Sou a primeira pessoa do grupo
-                        </Label>
-                        <p className="text-xs text-muted-foreground">
-                          Crie a organização e vire administrador.
-                        </p>
-                      </div>
-                      <Switch
-                        id="first-user"
-                        checked={isFirstUser}
-                        onCheckedChange={handleFirstUserChange}
-                        disabled={busy}
-                        aria-label="Sou a primeira pessoa do grupo"
-                      />
-                    </div>
-
-                    {isFirstUser ? (
-                      <div className="space-y-1.5">
-                        <Label htmlFor="org">Nome da organização</Label>
-                        <div className="relative">
-                          <Building2 className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-                          <Input
-                            id="org"
-                            type="text"
-                            autoComplete="organization"
-                            placeholder="Ex.: Fut das Quintas"
-                            value={orgName}
-                            onChange={(event) => {
-                              setOrgName(event.target.value);
-                              if (errors.org)
-                                setErrors((prev) => ({ ...prev, org: undefined }));
-                            }}
-                            aria-invalid={Boolean(errors.org)}
-                            aria-describedby={errors.org ? 'org-error' : undefined}
-                            disabled={busy}
-                            className="h-11 pl-9"
-                          />
-                        </div>
-                        {errors.org ? (
-                          <p id="org-error" className="text-xs font-medium text-destructive">
-                            {errors.org}
-                          </p>
-                        ) : null}
-                      </div>
-                    ) : null}
-
                     <div className="space-y-1.5">
                       <Label htmlFor="email">E-mail</Label>
                       <Input
