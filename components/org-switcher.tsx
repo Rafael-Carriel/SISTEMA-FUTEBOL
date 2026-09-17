@@ -1,13 +1,11 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { collection, doc, getDoc, getDocs } from 'firebase/firestore';
 import { ChevronsUpDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { db } from '@/lib/firebase';
 import { useAuth } from '@/lib/auth-context';
 import type { Organization } from '@/lib/fut-types';
-import { CURRENT_ORG_KEY, getCurrentOrg, setCurrentOrg } from '@/lib/organizations';
+import { CURRENT_ORG_KEY, getCurrentOrg, listMyOrganizations, setCurrentOrg } from '@/lib/organizations';
 
 export function OrgSwitcher({ onChange }: { onChange?: (slug: string) => void }) {
   const { user } = useAuth();
@@ -17,17 +15,7 @@ export function OrgSwitcher({ onChange }: { onChange?: (slug: string) => void })
   useEffect(() => {
     if (!user) return;
     (async () => {
-      const snap = await getDocs(collection(db, 'organizations'));
-      const mine: Organization[] = [];
-      for (const d of snap.docs) {
-        const org = { id: d.id, ...(d.data() as Omit<Organization, 'id'>) } as Organization;
-        try {
-          const m = await getDoc(doc(db, 'organizations', org.id, 'members', user.uid));
-          if (m.exists()) mine.push(org);
-        } catch {
-          // sem acesso: ignora
-        }
-      }
+      const mine = await listMyOrganizations(user.uid);
       setOrgs(mine);
       if (!getCurrentOrg() && mine[0]) {
         setCurrentOrg(mine[0].slug || mine[0].id);

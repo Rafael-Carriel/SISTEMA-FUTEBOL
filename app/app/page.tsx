@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useState, type FormEvent } from 'react';
-import { collection, getDoc, getDocs, doc } from 'firebase/firestore';
 import { Goal, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -9,10 +8,9 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
 import AuthGuard from '@/components/auth-guard';
-import { db } from '@/lib/firebase';
 import { useAuth } from '@/lib/auth-context';
 import type { Organization } from '@/lib/fut-types';
-import { createOrganization, setCurrentOrg } from '@/lib/organizations';
+import { createOrganization, listMyOrganizations, setCurrentOrg } from '@/lib/organizations';
 
 export default function MyFutsPage() {
   const { user } = useAuth();
@@ -27,13 +25,7 @@ export default function MyFutsPage() {
     (async () => {
       setLoading(true);
       try {
-        const snap = await getDocs(collection(db, 'organizations'));
-        const mine: Organization[] = [];
-        for (const d of snap.docs) {
-          const m = await getDoc(doc(db, 'organizations', d.id, 'members', user.uid));
-          if (m.exists()) mine.push({ id: d.id, ...(d.data() as Omit<Organization, 'id'>) });
-        }
-        setOrgs(mine);
+        setOrgs(await listMyOrganizations(user.uid));
       } finally {
         setLoading(false);
       }

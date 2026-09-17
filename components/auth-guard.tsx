@@ -34,10 +34,26 @@ export function AuthGuard({ children, orgId, requiredRole = 'member' }: AuthGuar
     }
   }, [loading, user]);
 
-  if (loading || !isAuthorized) {
+  if (loading || !user) {
     return (
       <div className="flex min-h-screen items-center justify-center">
         <Loader2Icon className="size-6 animate-spin" aria-label="Carregando" />
+      </div>
+    );
+  }
+
+  if (!hasAccess) {
+    return (
+      <div className="mx-auto flex min-h-screen w-full max-w-md flex-col items-center justify-center gap-4 px-4 text-center">
+        <p className="text-lg font-black tracking-tight">Sem acesso a este futebol</p>
+        <p className="text-sm text-muted-foreground">Peça ao administrador um convite com o seu e-mail.</p>
+        <button
+          type="button"
+          onClick={() => window.location.assign('/app')}
+          className="h-10 rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground"
+        >
+          Meus futebóis
+        </button>
       </div>
     );
   }

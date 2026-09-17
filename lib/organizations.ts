@@ -1,14 +1,6 @@
 'use client';
 
-import {
-  collection,
-  doc,
-  getDoc,
-  getDocs,
-  query,
-  where,
-  writeBatch,
-} from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs, writeBatch } from 'firebase/firestore';
 import type { User as FirebaseUser } from 'firebase/auth';
 import { db } from '@/lib/firebase';
 import type { Member, Organization } from '@/lib/fut-types';
@@ -75,22 +67,20 @@ export async function createOrganization(
   return org;
 }
 
-/** Todos os futebóis onde o usuário é membro (via subcoleção members). */
+/** Todos os futebóis onde o usuário é membro (checa members de cada org). */
 export async function listMyOrganizations(uid: string): Promise<Organization[]> {
-  const groups = await getDocs(
-    query(collection(db, 'organizations'), where('createdBy', '==', uid)),
-  );
-  const owned = groups.docs.map((d) => d.data() as Organization);
-
-  // Membro sem ser dono: varre members via collectionGroup não é permitido aqui
-  // sem índice; o app resolve via leitura direta das orgs conhecidas + current.
-  // Mantemos owned + current como base; a página /app completa com getDoc.
-  const current = getCurrentOrg();
-  if (current && !owned.some((o) => o.id === current)) {
-    const snap = await getDoc(doc(db, 'organizations', current));
-    if (snap.exists()) owned.push(snap.data() as Organization);
+  const snap = await getDocs(collection(db, 'organizations'));
+  const mine: Organization[] = [];
+  for (const d of snap.docs) {
+    const org = { id: d.id, ...(d.data() as Omit<Organization, 'id'>) } as Organization;
+    try {
+      const m = await getDoc(doc(db, 'organizations', org.id, 'members', uid));
+      if (m.exists()) mine.push(org);
+    } catch {
+      // sem acesso ao members: ignora
+    }
   }
-  return owned;
+  return mine;
 }
 
 export async function getOrganization(slug: string): Promise<Organization | null> {
