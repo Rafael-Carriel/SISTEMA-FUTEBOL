@@ -13,7 +13,8 @@ export type Player = {
   shooting: number;
   passing: number;
   defending: number;
-  physical: number;
+  resistance: number;
+  strength: number;
   dribbling: number;
   goalkeeping: number;
   createdAt: string;

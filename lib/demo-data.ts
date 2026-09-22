@@ -1,16 +1,16 @@
 import type { Match, Payment, Player } from './fut-types';
 
 export const demoPlayers: Player[] = [
-  { id: 'matheus', name: 'Matheus Oliveira', nickname: 'Matheus', number: 10, position: 'ATA', pace: 84, shooting: 88, passing: 76, dribbling: 85, defending: 42, physical: 78, goalkeeping: 35, createdAt: '2026-08-01T12:00:00.000Z' },
-  { id: 'juninho', name: 'Junior Pereira', nickname: 'Juninho', number: 7, position: 'MEI', pace: 82, shooting: 80, passing: 87, dribbling: 88, defending: 52, physical: 69, goalkeeping: 40, createdAt: '2026-08-01T12:01:00.000Z' },
-  { id: 'caio', name: 'Caio Henrique', nickname: 'Caio', number: 9, position: 'ATA', pace: 79, shooting: 84, passing: 72, dribbling: 76, defending: 39, physical: 81, goalkeeping: 33, createdAt: '2026-08-01T12:02:00.000Z' },
-  { id: 'biel', name: 'Gabriel Santos', nickname: 'Biel', number: 11, position: 'ATA', pace: 88, shooting: 79, passing: 74, dribbling: 90, defending: 38, physical: 72, goalkeeping: 30, createdAt: '2026-08-01T12:03:00.000Z' },
-  { id: 'rafa', name: 'Rafael Lima', nickname: 'Rafa', number: 1, position: 'GOL', pace: 58, shooting: 45, passing: 70, dribbling: 45, defending: 89, physical: 82, goalkeeping: 87, createdAt: '2026-08-01T12:04:00.000Z' },
-  { id: 'dudu', name: 'Eduardo Alves', nickname: 'Dudu', number: 4, position: 'ZAG', pace: 68, shooting: 55, passing: 68, dribbling: 60, defending: 86, physical: 88, goalkeeping: 45, createdAt: '2026-08-01T12:05:00.000Z' },
-  { id: 'pedro', name: 'Pedro Martins', nickname: 'Pedrinho', number: 8, position: 'MEI', pace: 77, shooting: 73, passing: 84, dribbling: 80, defending: 61, physical: 70, goalkeeping: 38, createdAt: '2026-08-01T12:06:00.000Z' },
-  { id: 'lucas', name: 'Lucas Rocha', nickname: 'Luquinha', number: 5, position: 'ZAG', pace: 72, shooting: 58, passing: 71, dribbling: 58, defending: 82, physical: 85, goalkeeping: 42, createdAt: '2026-08-01T12:07:00.000Z' },
-  { id: 'bruno', name: 'Bruno Costa', nickname: 'Brunão', number: 12, position: 'GOL', pace: 55, shooting: 42, passing: 66, dribbling: 40, defending: 86, physical: 87, goalkeeping: 85, createdAt: '2026-08-01T12:08:00.000Z' },
-  { id: 'leo', name: 'Leonardo Souza', nickname: 'Léo', number: 6, position: 'MEI', pace: 80, shooting: 72, passing: 82, dribbling: 75, defending: 66, physical: 73, goalkeeping: 36, createdAt: '2026-08-01T12:09:00.000Z' },
+  { id: 'matheus', name: 'Matheus Oliveira', nickname: 'Matheus', number: 10, position: 'ATA', pace: 84, shooting: 88, passing: 76, dribbling: 85, defending: 42, resistance: 78, strength: 78, goalkeeping: 35, createdAt: '2026-08-01T12:00:00.000Z' },
+  { id: 'juninho', name: 'Junior Pereira', nickname: 'Juninho', number: 7, position: 'MEI', pace: 82, shooting: 80, passing: 87, dribbling: 88, defending: 52, resistance: 69, strength: 69, goalkeeping: 40, createdAt: '2026-08-01T12:01:00.000Z' },
+  { id: 'caio', name: 'Caio Henrique', nickname: 'Caio', number: 9, position: 'ATA', pace: 79, shooting: 84, passing: 72, dribbling: 76, defending: 39, resistance: 81, strength: 81, goalkeeping: 33, createdAt: '2026-08-01T12:02:00.000Z' },
+  { id: 'biel', name: 'Gabriel Santos', nickname: 'Biel', number: 11, position: 'ATA', pace: 88, shooting: 79, passing: 74, dribbling: 90, defending: 38, resistance: 72, strength: 72, goalkeeping: 30, createdAt: '2026-08-01T12:03:00.000Z' },
+  { id: 'rafa', name: 'Rafael Lima', nickname: 'Rafa', number: 1, position: 'GOL', pace: 58, shooting: 45, passing: 70, dribbling: 45, defending: 89, resistance: 82, strength: 82, goalkeeping: 87, createdAt: '2026-08-01T12:04:00.000Z' },
+  { id: 'dudu', name: 'Eduardo Alves', nickname: 'Dudu', number: 4, position: 'ZAG', pace: 68, shooting: 55, passing: 68, dribbling: 60, defending: 86, resistance: 88, strength: 88, goalkeeping: 45, createdAt: '2026-08-01T12:05:00.000Z' },
+  { id: 'pedro', name: 'Pedro Martins', nickname: 'Pedrinho', number: 8, position: 'MEI', pace: 77, shooting: 73, passing: 84, dribbling: 80, defending: 61, resistance: 70, strength: 70, goalkeeping: 38, createdAt: '2026-08-01T12:06:00.000Z' },
+  { id: 'lucas', name: 'Lucas Rocha', nickname: 'Luquinha', number: 5, position: 'ZAG', pace: 72, shooting: 58, passing: 71, dribbling: 58, defending: 82, resistance: 85, strength: 85, goalkeeping: 42, createdAt: '2026-08-01T12:07:00.000Z' },
+  { id: 'bruno', name: 'Bruno Costa', nickname: 'Brunão', number: 12, position: 'GOL', pace: 55, shooting: 42, passing: 66, dribbling: 40, defending: 86, resistance: 87, strength: 87, goalkeeping: 85, createdAt: '2026-08-01T12:08:00.000Z' },
+  { id: 'leo', name: 'Leonardo Souza', nickname: 'Léo', number: 6, position: 'MEI', pace: 80, shooting: 72, passing: 82, dribbling: 75, defending: 66, resistance: 73, strength: 73, goalkeeping: 36, createdAt: '2026-08-01T12:09:00.000Z' },
 ];
 
 export const demoMatches: Match[] = [

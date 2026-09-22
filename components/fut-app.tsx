@@ -276,7 +276,7 @@ export function FutApp({ orgId }: { orgId?: string }) {
   async function savePlayer() {
     if (!playerForm.name.trim()) return showNotice('Digite o nome do jogador.');
     const id = crypto.randomUUID(), nickname = playerForm.nickname.trim() || playerForm.name.trim().split(' ')[0];
-    const player: Player = { id, name: playerForm.name.trim(), nickname, number: Number(playerForm.number) || 0, position: playerForm.position, photoUrl: playerForm.photoUrl || undefined, pace: 70, shooting: playerForm.position === 'ATA' ? 75 : 65, passing: playerForm.position === 'MEI' ? 75 : 68, dribbling: ['ATA', 'MEI'].includes(playerForm.position) ? 72 : 55, defending: ['GOL', 'ZAG'].includes(playerForm.position) ? 78 : 58, physical: 70, goalkeeping: playerForm.position === 'GOL' ? 80 : 35, createdAt: new Date().toISOString() };
+    const player: Player = { id, name: playerForm.name.trim(), nickname, number: Number(playerForm.number) || 0, position: playerForm.position, photoUrl: playerForm.photoUrl || undefined, pace: 70, shooting: playerForm.position === 'ATA' ? 75 : 65, passing: playerForm.position === 'MEI' ? 75 : 68, dribbling: ['ATA', 'MEI'].includes(playerForm.position) ? 72 : 55, defending: ['GOL', 'ZAG'].includes(playerForm.position) ? 78 : 58, resistance: 70, strength: 70, goalkeeping: playerForm.position === 'GOL' ? 80 : 35, createdAt: new Date().toISOString() };
     try { await setDoc(doc(db, 'players', id), withOrg(player)); await setDoc(doc(db, 'payments', `${monthKey}_${id}`), withOrg({ id: `${monthKey}_${id}`, playerId: id, month: monthKey, amount: 40, paid: false })); } catch { setPlayers((all) => [...all, player]); }
     setDialog(null); setPlayerForm({ name: '', nickname: '', number: '10', position: 'ATA', photoUrl: '' }); showNotice(`${nickname} entrou para o elenco.`);
   }
@@ -374,7 +374,7 @@ export function FutApp({ orgId }: { orgId?: string }) {
     const name = avulsoName.trim();
     const avulsoPlayer: Player = {
       id, name, nickname: name, number: 0,
-      position: 'ATA', pace: 0, shooting: 0, passing: 0, dribbling: 0, defending: 0, physical: 0, goalkeeping: 0,
+      position: 'ATA', pace: 0, shooting: 0, passing: 0, dribbling: 0, defending: 0, resistance: 0, strength: 0, goalkeeping: 0,
       createdAt: new Date().toISOString(),
       isAvulso: true,
       matchId: avulsoMatchId || undefined,
@@ -429,7 +429,7 @@ export function FutApp({ orgId }: { orgId?: string }) {
     showNotice(next ? `${playerById(playerId)?.nickname || 'Jogador'} agora está no gol.` : 'Goleiro removido da escalação.');
   }
 
-  async function updateRating(player: Player, field: 'pace' | 'shooting' | 'passing' | 'dribbling' | 'defending' | 'physical' | 'goalkeeping', value: number) {
+  async function updateRating(player: Player, field: 'pace' | 'shooting' | 'passing' | 'dribbling' | 'defending' | 'resistance' | 'strength' | 'goalkeeping', value: number) {
     const rating = Math.max(1, Math.min(99, value));
     setPlayers((all) => all.map((item) => (item.id === player.id ? { ...item, [field]: rating } : item)));
     try { await updateDoc(doc(db, 'players', player.id), { [field]: rating }); } catch { /* offline: local state already updated */ }
@@ -678,8 +678,9 @@ export function FutApp({ orgId }: { orgId?: string }) {
     drawStat(rightCol, statsY + statGap, selected.player.dribbling, 'DRI');
     drawStat(leftCol, statsY + statGap * 2, selected.player.defending, 'DEF');
     drawStat(rightCol, statsY + statGap * 2, selected.player.goalkeeping, 'GK');
-    drawStat(leftCol, statsY + statGap * 3, selected.player.physical, 'PHY');
-    drawStat(rightCol, statsY + statGap * 3, selected.overall, 'OVR');
+    drawStat(leftCol, statsY + statGap * 3, selected.player.resistance, 'RES');
+    drawStat(rightCol, statsY + statGap * 3, selected.player.strength, 'FOR');
+    drawStat(cx - 55, statsY + statGap * 4, selected.overall, 'OVR');
 
     const labels = {
       artilheiro: 'ARTILHEIRO DO MÊS',
@@ -1417,7 +1418,8 @@ export function FutApp({ orgId }: { orgId?: string }) {
               <div className="flex justify-between"><span className="text-xs font-black text-[#1a1a2e]">{artStats?.player.dribbling}</span><span className="text-[10px] font-bold text-[#1a1a2e]/60">DRI</span></div>
               <div className="flex justify-between"><span className="text-xs font-black text-[#1a1a2e]">{artStats?.player.defending}</span><span className="text-[10px] font-bold text-[#1a1a2e]/60">DEF</span></div>
               <div className="flex justify-between"><span className="text-xs font-black text-[#1a1a2e]">{artStats?.player.goalkeeping}</span><span className="text-[10px] font-bold text-[#1a1a2e]/60">GK</span></div>
-              <div className="flex justify-between"><span className="text-xs font-black text-[#1a1a2e]">{artStats?.player.physical}</span><span className="text-[10px] font-bold text-[#1a1a2e]/60">PHY</span></div>
+              <div className="flex justify-between"><span className="text-xs font-black text-[#1a1a2e]">{artStats?.player.resistance}</span><span className="text-[10px] font-bold text-[#1a1a2e]/60">RES</span></div>
+              <div className="flex justify-between"><span className="text-xs font-black text-[#1a1a2e]">{artStats?.player.strength}</span><span className="text-[10px] font-bold text-[#1a1a2e]/60">FOR</span></div>
               <div className="flex justify-between"><span className="text-xs font-black text-[#1a1a2e]">{artStats?.overall || 0}</span><span className="text-[10px] font-bold text-[#1a1a2e]/60">OVR</span></div>
             </div>
           </div>
@@ -1721,7 +1723,7 @@ export function FutApp({ orgId }: { orgId?: string }) {
           <DialogHeader><DialogTitle>Cartinha do jogador</DialogTitle><DialogDescription>Ajuste os atributos para montar o overall.</DialogDescription></DialogHeader>
           <div className="big-player-card"><PlayerAvatar player={activePlayerStats.player} size="xl" /><div><small>{activePlayerStats.player.position} · camisa {activePlayerStats.player.number}</small><h3>{activePlayerStats.player.nickname}</h3><p>{activePlayerStats.player.name}</p></div><strong>{activePlayerStats.overall}<small>OVERALL</small></strong></div>
           <label className="rating"><span>Overall</span><input type="range" min="1" max="99" value={activePlayerStats.overall} onChange={(e) => setOverall(activePlayerStats.player, Number(e.target.value))} /><b>{activePlayerStats.overall}</b></label>
-          <div className="space-y-3">{([['pace', 'Velocidade'], ['shooting', 'Finalização'], ['passing', 'Passe'], ['dribbling', 'Drible'], ['defending', 'Defesa'], ['physical', 'Físico'], ['goalkeeping', 'Goleiro']] as const).map(([field, label]) => <label key={field} className="rating"><span>{label}</span><input type="range" min="1" max="99" value={activePlayerStats.player[field]} onChange={(e) => updateRating(activePlayerStats.player, field, Number(e.target.value))} /><b>{activePlayerStats.player[field]}</b></label>)}</div>
+          <div className="space-y-3">{([['pace', 'Velocidade'], ['shooting', 'Finalização'], ['passing', 'Passe'], ['dribbling', 'Drible'], ['defending', 'Defesa'], ['resistance', 'Resistência'], ['strength', 'Força'], ['goalkeeping', 'Goleiro']] as const).map(([field, label]) => <label key={field} className="rating"><span>{label}</span><input type="range" min="1" max="99" value={activePlayerStats.player[field]} onChange={(e) => updateRating(activePlayerStats.player, field, Number(e.target.value))} /><b>{activePlayerStats.player[field]}</b></label>)}</div>
           <DialogFooter>
             <Button variant="destructive" size="sm" onClick={() => deletePlayer(activePlayerStats.player)}>Excluir jogador</Button>
             <div className="flex-1" />

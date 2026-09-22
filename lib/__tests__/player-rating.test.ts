@@ -14,7 +14,8 @@ function makePlayer(overrides: Partial<Player> & { id: string }): Player {
     passing: 70,
     dribbling: 70,
     defending: 70,
-    physical: 70,
+    resistance: 70,
+    strength: 70,
     goalkeeping: 35,
     createdAt: new Date().toISOString(),
     ...overrides,
@@ -22,26 +23,26 @@ function makePlayer(overrides: Partial<Player> & { id: string }): Player {
 }
 
 describe('calcOverall', () => {
-  it('mede jogador de linha com os 6 atributos de campo (drible entra, goleiro ignorado)', () => {
+  it('mede jogador de linha com os 7 atributos de campo (drible entra, goleiro ignorado)', () => {
     const atacante = makePlayer({
       id: 'a1',
       position: 'ATA',
-      pace: 80, shooting: 80, passing: 80, dribbling: 80, defending: 40, physical: 80, goalkeeping: 99,
+      pace: 80, shooting: 80, passing: 80, dribbling: 80, defending: 40, resistance: 80, strength: 80, goalkeeping: 99,
     });
-    expect(calcOverall(atacante)).toBe(73);
+    expect(calcOverall(atacante)).toBe(74);
     // Goleiro não pesa no overall de quem joga fora do gol.
-    expect(calcOverall({ ...atacante, goalkeeping: 1 })).toBe(73);
+    expect(calcOverall({ ...atacante, goalkeeping: 1 })).toBe(74);
   });
 
   it('mede goleiro dando peso à habilidade de goleiro', () => {
     const goleiro = makePlayer({
       id: 'g1',
       position: 'GOL',
-      pace: 60, shooting: 30, passing: 70, dribbling: 30, defending: 80, physical: 70, goalkeeping: 90,
+      pace: 60, shooting: 30, passing: 70, dribbling: 30, defending: 80, resistance: 70, strength: 70, goalkeeping: 90,
     });
-    expect(calcOverall(goleiro)).toBe(81);
+    expect(calcOverall(goleiro)).toBe(80);
     // Chute e drible não pesam no overall de goleiro.
-    expect(calcOverall({ ...goleiro, shooting: 95, dribbling: 95 })).toBe(81);
+    expect(calcOverall({ ...goleiro, shooting: 95, dribbling: 95 })).toBe(80);
   });
 });
 
@@ -60,5 +61,17 @@ describe('normalizePlayer', () => {
   it('mantém tudo que já existia quando os atributos estão presentes', () => {
     const atual = makePlayer({ id: 'atual', position: 'GOL', dribbling: 44, goalkeeping: 91 });
     expect(normalizePlayer(atual)).toBe(atual);
+  });
+
+  it('migra physical legado para resistência e força', () => {
+    const antigo = {
+      ...makePlayer({ id: 'legacy' }),
+      resistance: undefined,
+      strength: undefined,
+      physical: 75,
+    } as unknown as Player;
+    const normalizado = normalizePlayer(antigo);
+    expect(normalizado.resistance).toBe(75);
+    expect(normalizado.strength).toBe(75);
   });
 });

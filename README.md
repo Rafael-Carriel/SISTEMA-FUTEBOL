@@ -14,7 +14,7 @@
 
 - **Dashboard** — Placar ao vivo + artilharia do mês + caixa
 - **Partidas** — Criação com sorteio equilibrado por overall, controle `agendado → ao vivo → encerrado`, registro de gols/defesas com assistência
-- **Jogadores** — Cartinhas com 7 atributos (pace/shooting/passing/dribbling/defending/physical/goalkeeping), foto e overall
+- **Jogadores** — Cartinhas com 8 atributos (pace/shooting/passing/dribbling/defending/resistance/strength/goalkeeping), foto e overall
 - **Rankings** — Artilheiros, assistências, paredões e mais vitórias
 - **Mensalidades** — Controle mensal R$ 40/jogador
 - **Artes** — Gerador de artes 1080x1350 para Instagram/WhatsApp
