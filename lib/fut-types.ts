@@ -14,6 +14,8 @@ export type Player = {
   passing: number;
   defending: number;
   physical: number;
+  dribbling: number;
+  goalkeeping: number;
   createdAt: string;
   isAvulso?: boolean;
   matchId?: string;

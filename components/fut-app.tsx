@@ -14,6 +14,7 @@ import { DraggablePitch } from '@/components/draggable-pitch';
 import { LiveManager } from '@/components/live-manager';
 import { balancedTeamsSmart, getTeamBalanceInfo, uniqueLineupPlayers } from '@/lib/team-balancer';
 import { exportLineup } from '@/lib/lineup-export';
+import { calcOverall, normalizePlayer, RATING_FIELDS, ratingWeights } from '@/lib/player-rating';
 
 /* ─── constants & helpers ─── */
 type View = 'dashboard' | 'matches' | 'players' | 'rankings' | 'payments' | 'arts';
@@ -45,7 +46,6 @@ const FORMAT_OPTIONS: { value: MatchFormat; label: string; players: number }[] =
 ];
 
 function initials(player?: Player) { return player ? (player.nickname || player.name).split(' ').slice(0, 2).map((part) => part[0]).join('').toUpperCase() : '?'; }
-function calcOverall(player: Player) { return Math.round((player.pace + player.shooting + player.passing + player.defending + player.physical) / 5); }
 function formatDate(value: string) { return new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: 'short' }).format(new Date(`${value}T12:00:00`)); }
 
 function dedupePlayerRecords(records: Player[]): Player[] {
@@ -180,7 +180,7 @@ export function FutApp({ orgId }: { orgId?: string }) {
       const qPayments = query(collection(db, 'payments'), where('orgId', '==', orgId));
       setConnection('connecting');
       const unsubscribers = [
-        onSnapshot(qPlayers, (snap) => { setPlayers(dedupePlayerRecords(snap.docs.map((item) => ({ ...item.data(), id: item.id }) as Player)).sort((a, b) => a.nickname.localeCompare(b.nickname))); setConnection('online'); }, () => setConnection('demo')),
+        onSnapshot(qPlayers, (snap) => { setPlayers(dedupePlayerRecords(snap.docs.map((item) => normalizePlayer({ ...item.data(), id: item.id } as Player))).sort((a, b) => a.nickname.localeCompare(b.nickname))); setConnection('online'); }, () => setConnection('demo')),
         onSnapshot(qMatches, (snap) => setMatches(snap.docs.map((item) => normalizeMatchTeams(({ ...item.data(), id: item.id }) as Match)).sort((a, b) => `${b.date}${b.time}`.localeCompare(`${a.date}${a.time}`)))),
         onSnapshot(qPayments, (snap) => setPayments(snap.docs.map((item) => ({ ...item.data(), id: item.id }) as Payment))),
       ];
@@ -200,7 +200,7 @@ export function FutApp({ orgId }: { orgId?: string }) {
         }
         if (cancelled) return;
         unsubscribers.push(
-          onSnapshot(collection(db, 'players'), (snap) => { setPlayers(dedupePlayerRecords(snap.docs.map((item) => ({ ...item.data(), id: item.id }) as Player)).sort((a, b) => a.nickname.localeCompare(b.nickname))); setConnection('online'); }),
+          onSnapshot(collection(db, 'players'), (snap) => { setPlayers(dedupePlayerRecords(snap.docs.map((item) => normalizePlayer({ ...item.data(), id: item.id } as Player))).sort((a, b) => a.nickname.localeCompare(b.nickname))); setConnection('online'); }),
           onSnapshot(collection(db, 'matches'), (snap) => setMatches(snap.docs.map((item) => normalizeMatchTeams(({ ...item.data(), id: item.id }) as Match)).sort((a, b) => `${b.date}${b.time}`.localeCompare(`${a.date}${a.time}`)))),
           onSnapshot(collection(db, 'payments'), (snap) => setPayments(snap.docs.map((item) => ({ ...item.data(), id: item.id }) as Payment))),
         );
@@ -276,7 +276,7 @@ export function FutApp({ orgId }: { orgId?: string }) {
   async function savePlayer() {
     if (!playerForm.name.trim()) return showNotice('Digite o nome do jogador.');
     const id = crypto.randomUUID(), nickname = playerForm.nickname.trim() || playerForm.name.trim().split(' ')[0];
-    const player: Player = { id, name: playerForm.name.trim(), nickname, number: Number(playerForm.number) || 0, position: playerForm.position, photoUrl: playerForm.photoUrl || undefined, pace: 70, shooting: playerForm.position === 'ATA' ? 75 : 65, passing: playerForm.position === 'MEI' ? 75 : 68, defending: ['GOL', 'ZAG'].includes(playerForm.position) ? 78 : 58, physical: 70, createdAt: new Date().toISOString() };
+    const player: Player = { id, name: playerForm.name.trim(), nickname, number: Number(playerForm.number) || 0, position: playerForm.position, photoUrl: playerForm.photoUrl || undefined, pace: 70, shooting: playerForm.position === 'ATA' ? 75 : 65, passing: playerForm.position === 'MEI' ? 75 : 68, dribbling: ['ATA', 'MEI'].includes(playerForm.position) ? 72 : 55, defending: ['GOL', 'ZAG'].includes(playerForm.position) ? 78 : 58, physical: 70, goalkeeping: playerForm.position === 'GOL' ? 80 : 35, createdAt: new Date().toISOString() };
     try { await setDoc(doc(db, 'players', id), withOrg(player)); await setDoc(doc(db, 'payments', `${monthKey}_${id}`), withOrg({ id: `${monthKey}_${id}`, playerId: id, month: monthKey, amount: 40, paid: false })); } catch { setPlayers((all) => [...all, player]); }
     setDialog(null); setPlayerForm({ name: '', nickname: '', number: '10', position: 'ATA', photoUrl: '' }); showNotice(`${nickname} entrou para o elenco.`);
   }
@@ -374,7 +374,7 @@ export function FutApp({ orgId }: { orgId?: string }) {
     const name = avulsoName.trim();
     const avulsoPlayer: Player = {
       id, name, nickname: name, number: 0,
-      position: 'ATA', pace: 0, shooting: 0, passing: 0, defending: 0, physical: 0,
+      position: 'ATA', pace: 0, shooting: 0, passing: 0, dribbling: 0, defending: 0, physical: 0, goalkeeping: 0,
       createdAt: new Date().toISOString(),
       isAvulso: true,
       matchId: avulsoMatchId || undefined,
@@ -429,7 +429,7 @@ export function FutApp({ orgId }: { orgId?: string }) {
     showNotice(next ? `${playerById(playerId)?.nickname || 'Jogador'} agora está no gol.` : 'Goleiro removido da escalação.');
   }
 
-  async function updateRating(player: Player, field: 'pace' | 'shooting' | 'passing' | 'defending' | 'physical', value: number) {
+  async function updateRating(player: Player, field: 'pace' | 'shooting' | 'passing' | 'dribbling' | 'defending' | 'physical' | 'goalkeeping', value: number) {
     const rating = Math.max(1, Math.min(99, value));
     setPlayers((all) => all.map((item) => (item.id === player.id ? { ...item, [field]: rating } : item)));
     try { await updateDoc(doc(db, 'players', player.id), { [field]: rating }); } catch { /* offline: local state already updated */ }
@@ -437,16 +437,17 @@ export function FutApp({ orgId }: { orgId?: string }) {
 
   async function setOverall(player: Player, targetOverall: number) {
     const clamped = Math.max(1, Math.min(99, targetOverall));
-    const fields = ['pace', 'shooting', 'passing', 'defending', 'physical'] as const;
-    const current = fields.map((f) => player[f]);
-    const currentAvg = current.reduce((s, v) => s + v, 0) / 5;
-    const scale = currentAvg === 0 ? clamped / 50 : clamped / currentAvg;
+    const weights = ratingWeights(player.position);
+    const fields = RATING_FIELDS.filter((field) => weights[field] > 0);
+    const current = fields.map((field) => player[field]);
+    const currentOverall = calcOverall(player);
+    const scale = currentOverall === 0 ? clamped / 50 : clamped / currentOverall;
     const updated: Record<string, number> = {};
-    fields.forEach((f, i) => { updated[f] = Math.max(1, Math.min(99, Math.round(current[i] * scale))); });
-    const newAvg = fields.reduce((s, f) => s + updated[f], 0) / 5;
-    if (Math.round(newAvg) !== clamped) {
-      const biggest = fields.reduce((a, b) => updated[a] >= updated[b] ? a : b);
-      updated[biggest] = Math.max(1, Math.min(99, updated[biggest] + (clamped - Math.round(newAvg))));
+    fields.forEach((field, i) => { updated[field] = Math.max(1, Math.min(99, Math.round(current[i] * scale))); });
+    const newOverall = calcOverall({ ...player, ...updated } as Player);
+    if (newOverall !== clamped) {
+      const biggest = fields.reduce((a, b) => updated[a] * weights[a] >= updated[b] * weights[b] ? a : b);
+      updated[biggest] = Math.max(1, Math.min(99, updated[biggest] + (clamped - newOverall)));
     }
     setPlayers((all) => all.map((item) => (item.id === player.id ? { ...item, ...updated } : item)));
     try { await updateDoc(doc(db, 'players', player.id), updated); } catch { /* offline */ }
@@ -674,9 +675,11 @@ export function FutApp({ orgId }: { orgId?: string }) {
     drawStat(leftCol, statsY, selected.player.pace, 'PAC');
     drawStat(rightCol, statsY, selected.player.shooting, 'SHO');
     drawStat(leftCol, statsY + statGap, selected.player.passing, 'PAS');
-    drawStat(rightCol, statsY + statGap, selected.player.physical, 'PHY');
+    drawStat(rightCol, statsY + statGap, selected.player.dribbling, 'DRI');
     drawStat(leftCol, statsY + statGap * 2, selected.player.defending, 'DEF');
-    drawStat(rightCol, statsY + statGap * 2, selected.overall, 'OVR');
+    drawStat(rightCol, statsY + statGap * 2, selected.player.goalkeeping, 'GK');
+    drawStat(leftCol, statsY + statGap * 3, selected.player.physical, 'PHY');
+    drawStat(rightCol, statsY + statGap * 3, selected.overall, 'OVR');
 
     const labels = {
       artilheiro: 'ARTILHEIRO DO MÊS',
@@ -1411,8 +1414,10 @@ export function FutApp({ orgId }: { orgId?: string }) {
               <div className="flex justify-between"><span className="text-xs font-black text-[#1a1a2e]">{artStats?.player.pace}</span><span className="text-[10px] font-bold text-[#1a1a2e]/60">PAC</span></div>
               <div className="flex justify-between"><span className="text-xs font-black text-[#1a1a2e]">{artStats?.player.shooting}</span><span className="text-[10px] font-bold text-[#1a1a2e]/60">SHO</span></div>
               <div className="flex justify-between"><span className="text-xs font-black text-[#1a1a2e]">{artStats?.player.passing}</span><span className="text-[10px] font-bold text-[#1a1a2e]/60">PAS</span></div>
-              <div className="flex justify-between"><span className="text-xs font-black text-[#1a1a2e]">{artStats?.player.physical}</span><span className="text-[10px] font-bold text-[#1a1a2e]/60">PHY</span></div>
+              <div className="flex justify-between"><span className="text-xs font-black text-[#1a1a2e]">{artStats?.player.dribbling}</span><span className="text-[10px] font-bold text-[#1a1a2e]/60">DRI</span></div>
               <div className="flex justify-between"><span className="text-xs font-black text-[#1a1a2e]">{artStats?.player.defending}</span><span className="text-[10px] font-bold text-[#1a1a2e]/60">DEF</span></div>
+              <div className="flex justify-between"><span className="text-xs font-black text-[#1a1a2e]">{artStats?.player.goalkeeping}</span><span className="text-[10px] font-bold text-[#1a1a2e]/60">GK</span></div>
+              <div className="flex justify-between"><span className="text-xs font-black text-[#1a1a2e]">{artStats?.player.physical}</span><span className="text-[10px] font-bold text-[#1a1a2e]/60">PHY</span></div>
               <div className="flex justify-between"><span className="text-xs font-black text-[#1a1a2e]">{artStats?.overall || 0}</span><span className="text-[10px] font-bold text-[#1a1a2e]/60">OVR</span></div>
             </div>
           </div>
@@ -1716,7 +1721,7 @@ export function FutApp({ orgId }: { orgId?: string }) {
           <DialogHeader><DialogTitle>Cartinha do jogador</DialogTitle><DialogDescription>Ajuste os atributos para montar o overall.</DialogDescription></DialogHeader>
           <div className="big-player-card"><PlayerAvatar player={activePlayerStats.player} size="xl" /><div><small>{activePlayerStats.player.position} · camisa {activePlayerStats.player.number}</small><h3>{activePlayerStats.player.nickname}</h3><p>{activePlayerStats.player.name}</p></div><strong>{activePlayerStats.overall}<small>OVERALL</small></strong></div>
           <label className="rating"><span>Overall</span><input type="range" min="1" max="99" value={activePlayerStats.overall} onChange={(e) => setOverall(activePlayerStats.player, Number(e.target.value))} /><b>{activePlayerStats.overall}</b></label>
-          <div className="space-y-3">{([['pace', 'Velocidade'], ['shooting', 'Finalização'], ['passing', 'Passe'], ['defending', 'Defesa'], ['physical', 'Físico']] as const).map(([field, label]) => <label key={field} className="rating"><span>{label}</span><input type="range" min="1" max="99" value={activePlayerStats.player[field]} onChange={(e) => updateRating(activePlayerStats.player, field, Number(e.target.value))} /><b>{activePlayerStats.player[field]}</b></label>)}</div>
+          <div className="space-y-3">{([['pace', 'Velocidade'], ['shooting', 'Finalização'], ['passing', 'Passe'], ['dribbling', 'Drible'], ['defending', 'Defesa'], ['physical', 'Físico'], ['goalkeeping', 'Goleiro']] as const).map(([field, label]) => <label key={field} className="rating"><span>{label}</span><input type="range" min="1" max="99" value={activePlayerStats.player[field]} onChange={(e) => updateRating(activePlayerStats.player, field, Number(e.target.value))} /><b>{activePlayerStats.player[field]}</b></label>)}</div>
           <DialogFooter>
             <Button variant="destructive" size="sm" onClick={() => deletePlayer(activePlayerStats.player)}>Excluir jogador</Button>
             <div className="flex-1" />

@@ -1,4 +1,5 @@
 import type { MatchFormat, Player, Position } from './fut-types';
+import { calcOverall } from './player-rating';
 
 export interface FormationPlayer {
   player: Player;
@@ -53,9 +54,6 @@ function roleDistance(player: Position, slot: Position): number {
   return Math.abs(ROLE_ORDER.indexOf(player) - ROLE_ORDER.indexOf(slot));
 }
 
-function overall(player: Player): number {
-  return Math.round((player.pace + player.shooting + player.passing + player.defending + player.physical) / 5);
-}
 
 function slotsForCount(format: MatchFormat, count: number): FormationSlot[] {
   const slots = [...FORMATIONS[format]];
@@ -98,7 +96,7 @@ export function assignFormationPositions(players: Player[], format: MatchFormat,
     }
     remaining.sort((a, b) => {
       const roleScore = roleDistance(a.position, slot.position) - roleDistance(b.position, slot.position);
-      return roleScore || overall(b) - overall(a);
+      return roleScore || calcOverall(b) - calcOverall(a);
     });
     const player = remaining.shift();
     return player ? [{ player, x: slot.x, y: slot.y }] : [];

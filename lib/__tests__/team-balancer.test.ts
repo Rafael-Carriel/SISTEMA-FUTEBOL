@@ -14,6 +14,8 @@ function makePlayer(overrides: Partial<Player> & { id: string }): Player {
     passing: 70,
     defending: 70,
     physical: 70,
+    dribbling: 70,
+    goalkeeping: 70,
     createdAt: new Date().toISOString(),
     ...overrides,
   };

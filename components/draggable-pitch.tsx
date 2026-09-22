@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Activity, GripVertical, MousePointer2, Sparkles } from 'lucide-react';
 import type { Player, MatchFormat, FieldPositions } from '@/lib/fut-types';
 import { assignFormationPositions } from '@/lib/formation-layout';
+import { calcOverall } from '@/lib/player-rating';
 
 /* ─── helpers ─── */
 function initials(player: Player): string {
@@ -295,7 +296,7 @@ function PitchHalf({
   onDragEnd,
 }: PitchHalfProps) {
   const teamOverall = players.length
-    ? Math.round(players.reduce((sum, item) => sum + Math.round((item.player.pace + item.player.shooting + item.player.passing + item.player.defending + item.player.physical) / 5), 0) / players.length)
+    ? Math.round(players.reduce((sum, item) => sum + calcOverall(item.player), 0) / players.length)
     : 0;
   return (
     <div className="lineup-team premium-lineup-card flex w-full flex-col gap-3" style={{ '--team-color': teamColor } as React.CSSProperties}>

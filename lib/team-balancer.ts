@@ -1,11 +1,9 @@
 import type { Player } from './fut-types';
+import { calcOverall } from './player-rating';
 
-function overall(player: Player): number {
-  return Math.round((player.pace + player.shooting + player.passing + player.defending + player.physical) / 5);
-}
 
 function teamPower(players: Player[]): number {
-  return players.reduce((sum, p) => sum + overall(p) + 0.3 * p.pace + 0.2 * p.defending + 0.15 * p.shooting, 0);
+  return players.reduce((sum, p) => sum + calcOverall(p) + 0.3 * p.pace + 0.2 * p.defending + 0.15 * p.shooting, 0);
 }
 
 function playerIdentity(player: Player): string {
@@ -48,14 +46,14 @@ export function balancedTeamsSmart(ids: string[], playerById: (id: string) => Pl
   const maxB = Math.floor(players.length / 2);
   const positions = ['GOL', 'ZAG', 'MEI', 'ATA'] as const;
   const weightedPower = (player: Player) =>
-    overall(player) + 0.3 * player.pace + 0.2 * player.defending + 0.15 * player.shooting;
+    calcOverall(player) + 0.3 * player.pace + 0.2 * player.defending + 0.15 * player.shooting;
 
   // Distribute one position at a time. This keeps both teams with the closest
   // possible number of goalkeepers, defenders, midfielders and attackers.
   for (const position of positions) {
     const group = players
       .filter((player) => player.position === position)
-      .sort((a, b) => overall(b) - overall(a));
+      .sort((a, b) => calcOverall(b) - calcOverall(a));
 
     for (const player of group) {
       const countA = teamA.filter((member) => member.position === position).length;
