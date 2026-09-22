@@ -44,7 +44,10 @@ export function MembersPanel({ orgId, ownerId }: { orgId: string; ownerId: strin
     try {
       setCode(await generateGroupCode(orgId));
       setOk('Código válido por 7 dias. Compartilhe com a galera. O código anterior foi desativado.');
-    } catch { setError('Não foi possível gerar o código. Tente novamente.'); }
+    } catch (e) {
+      console.error(e);
+      setError(e instanceof Error ? e.message : 'Não foi possível gerar o código. Tente novamente.');
+    }
     finally { setSaving(false); }
   }
 

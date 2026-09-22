@@ -16,7 +16,11 @@ export async function generateGroupCode(orgId: string): Promise<string> {
     const existing = await tx.get(codeRef);
     if (existing.exists()) throw new Error('Tente gerar o código novamente.');
     const previous = org.data()?.joinCode;
-    if (previous) tx.delete(doc(db, 'groupCodes', previous));
+    if (previous) {
+      const previousRef = doc(db, 'groupCodes', previous);
+      const previousDoc = await tx.get(previousRef);
+      if (previousDoc.exists()) tx.delete(previousRef);
+    }
     tx.set(codeRef, { orgId, expiresAt: Timestamp.fromMillis(Date.now() + 7 * 86400000) });
     tx.set(orgRef, { joinCode: code });
   });

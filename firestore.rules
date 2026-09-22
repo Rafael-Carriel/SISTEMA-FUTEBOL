@@ -113,9 +113,9 @@ service cloud.firestore {
         && request.resource.data.keys().hasOnly(['orgId', 'expiresAt'])
         && hasOrgAccess(request.resource.data.orgId, ['admin'])
         && request.resource.data.expiresAt > request.time
-        && request.resource.data.expiresAt <= request.time + duration.value(7, 'd');
+        && request.resource.data.expiresAt <= request.time + duration.value(8, 'd');
       allow update: if false;
-      allow delete: if hasOrgAccess(resource.data.orgId, ['admin']);
+      allow delete: if resource == null || hasOrgAccess(resource.data.orgId, ['admin']);
     }
 
     // =====================================================================
