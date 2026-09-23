@@ -135,6 +135,7 @@ export function FutApp({ orgId }: { orgId?: string }) {
   const [artPhotoUrl, setArtPhotoUrl] = useState('');
   const [rankingTab, setRankingTab] = useState<RankingTab>('goals');
   const [previewTeams, setPreviewTeams] = useState<{ teamA: string[]; teamB: string[] } | null>(null);
+  const [swapPick, setSwapPick] = useState<string | null>(null);
   const [dragPositions, setDragPositions] = useState<FieldPositions>({});
   const [showLiveManager, setShowLiveManager] = useState(false);
   const [exportFormat, setExportFormat] = useState<'png' | 'jpeg'>('png');
@@ -265,11 +266,20 @@ export function FutApp({ orgId }: { orgId?: string }) {
     setMatchForm((form) => ({ ...form, selected: uniqueIds }));
     setIsDrawingTeams(true);
     setPreviewTeams(null);
+    setSwapPick(null);
     setDragPositions({});
     window.setTimeout(() => {
       setPreviewTeams(balancedTeamsSmart(uniqueIds, (id) => playerById(id)));
       setIsDrawingTeams(false);
     }, 720);
+  }
+
+  /** Troca a posição de dois jogadores na escalação (mesmo time ou entre times). */
+  function swapPreviewPlayers(pickId: string, targetId: string) {
+    if (!previewTeams || pickId === targetId) return;
+    const swap = (ids: string[]) => ids.map((x) => (x === pickId ? targetId : x === targetId ? pickId : x));
+    setPreviewTeams({ teamA: swap(previewTeams.teamA), teamB: swap(previewTeams.teamB) });
+    setSwapPick(null);
   }
 
   /* ─── CRUD operations ─── */
@@ -286,7 +296,7 @@ export function FutApp({ orgId }: { orgId?: string }) {
     
     if (editingMatchId) {
       // Edit mode - update existing match
-      const teams = balancedTeamsSmart(matchForm.selected, (id) => playerById(id));
+      const teams = previewTeams ?? balancedTeamsSmart(matchForm.selected, (id) => playerById(id));
       const hasPositions = Object.keys(dragPositions).length > 0;
       const update: Partial<Match> = {
         title: matchForm.title || 'Fut da galera',
@@ -303,7 +313,7 @@ export function FutApp({ orgId }: { orgId?: string }) {
     } else {
       // Create mode - new match
       const id = crypto.randomUUID();
-      const teams = balancedTeamsSmart(matchForm.selected, (id) => playerById(id));
+      const teams = previewTeams ?? balancedTeamsSmart(matchForm.selected, (id) => playerById(id));
       const hasPositions = Object.keys(dragPositions).length > 0;
       const match: Match = {
         id, title: matchForm.title || 'Fut da galera', venue: matchForm.venue, date: matchForm.date, time: matchForm.time,
@@ -1546,7 +1556,7 @@ export function FutApp({ orgId }: { orgId?: string }) {
       </Dialog>
 
       {/* Match dialog (with balance preview + format selector + drag positions) */}
-      <Dialog open={dialog === 'match'} onOpenChange={(open) => { if (!open) { setDialog(null); setPreviewTeams(null); setDragPositions({}); setEditingMatchId(null); } }}>
+      <Dialog open={dialog === 'match'} onOpenChange={(open) => { if (!open) { setDialog(null); setPreviewTeams(null); setSwapPick(null); setDragPositions({}); setEditingMatchId(null); } }}>
         <DialogContent className="flex max-h-[94vh] flex-col gap-0 overflow-hidden p-0 sm:max-w-5xl">
           <DialogHeader className="shrink-0 px-6 pt-6 pb-2"><DialogTitle>{editingMatchId ? 'Editar partida' : 'Nova partida'}</DialogTitle><DialogDescription>{editingMatchId ? 'Ajuste os detalhes e a escalação da partida.' : 'Selecione o formato e os confirmados; o sorteio inteligente equilibra por atributos.'}</DialogDescription></DialogHeader>
           <div className="flex-1 overflow-y-auto grid gap-4 sm:grid-cols-2 px-6 pb-6 pt-2">
@@ -1596,7 +1606,7 @@ export function FutApp({ orgId }: { orgId?: string }) {
                       onKeyDown={(e) => {
                         if (e.key === 'Enter' && avulsoName.trim()) {
                           addAvulso().then((newId) => {
-                            if (newId) setMatchForm((form) => ({ ...form, selected: [...form.selected, newId] }));
+                            if (newId) { setPreviewTeams(null); setSwapPick(null); setMatchForm((form) => ({ ...form, selected: [...form.selected, newId] })); }
                           });
                         }
                       }}
@@ -1616,6 +1626,8 @@ export function FutApp({ orgId }: { orgId?: string }) {
                       onClick={async () => {
                         const newId = await addAvulso();
                         if (newId) {
+                          setPreviewTeams(null);
+                          setSwapPick(null);
                           setMatchForm((form) => ({ ...form, selected: [...form.selected, newId] }));
                         }
                       }}
@@ -1631,7 +1643,7 @@ export function FutApp({ orgId }: { orgId?: string }) {
 
             <div className="sm:col-span-2">
               <p className="form-label mb-2">Escalação · {matchForm.selected.length} confirmados</p>
-              <div className="roster max-h-48 overflow-y-auto pr-1 grid grid-cols-2 sm:grid-cols-3 gap-2">{players.map((player) => { const checked = matchForm.selected.includes(player.id); return <button key={player.id} onClick={() => { setPreviewTeams(null); setMatchForm((form) => ({ ...form, selected: checked ? form.selected.filter((id) => id !== player.id) : [...form.selected, player.id] })); }} className={checked ? 'checked' : ''}><i>{checked && <Check />}</i><PlayerAvatar player={player} size="sm" /><b>{player.nickname}</b><small>{calcOverall(player)}</small></button>; })}</div>
+              <div className="roster max-h-48 overflow-y-auto pr-1 grid grid-cols-2 sm:grid-cols-3 gap-2">{players.map((player) => { const checked = matchForm.selected.includes(player.id); return <button key={player.id} onClick={() => { setPreviewTeams(null); setSwapPick(null); setMatchForm((form) => ({ ...form, selected: checked ? form.selected.filter((id) => id !== player.id) : [...form.selected, player.id] })); }} className={checked ? 'checked' : ''}><i>{checked && <Check />}</i><PlayerAvatar player={player} size="sm" /><b>{player.nickname}</b><small>{calcOverall(player)}</small></button>; })}</div>
             </div>
 
             {/* Balance preview with draggable pitch - DENTRO do scroll */}
@@ -1649,7 +1661,7 @@ export function FutApp({ orgId }: { orgId?: string }) {
                     <div className="flex items-center gap-2">
                       {previewBalance && <span className="balance-chip"><Check /> {previewBalance.percentage}% equilibrado</span>}
                       <button onClick={previewDraft} className="rounded-xl border border-border bg-background px-3 py-2 text-xs font-semibold transition hover:border-primary hover:text-primary"><Sparkles className="mr-1 inline size-3.5" /> Sortear novamente</button>
-                      <button onClick={() => { setPreviewTeams(null); setDragPositions({}); }} className="grid size-8 place-items-center rounded-xl text-muted-foreground hover:bg-muted hover:text-foreground" aria-label="Limpar sorteio"><X className="size-4" /></button>
+                      <button onClick={() => { setPreviewTeams(null); setSwapPick(null); setDragPositions({}); }} className="grid size-8 place-items-center rounded-xl text-muted-foreground hover:bg-muted hover:text-foreground" aria-label="Limpar sorteio"><X className="size-4" /></button>
                     </div>
                   </div>
                   <DraggablePitch
@@ -1663,7 +1675,35 @@ export function FutApp({ orgId }: { orgId?: string }) {
                     fieldPositions={dragPositions}
                     onPositionsChange={setDragPositions}
                   />
-                  <div className="mt-4 flex items-center justify-center gap-2 rounded-xl bg-muted/70 px-3 py-2 text-[10px] font-bold text-muted-foreground"><Menu className="size-3" /> Segure e arraste um jogador para ajustar a posição</div>
+                  <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                    {(['A', 'B'] as const).map((team) => {
+                      const teamName = team === 'A' ? 'Time Verde' : 'Time Branco';
+                      const teamPlayers = team === 'A' ? previewTeamAPlayers : previewTeamBPlayers;
+                      return (
+                        <div key={team} className="rounded-xl border border-border bg-background/70 p-2.5">
+                          <p className="mb-2 text-[10px] font-black uppercase tracking-[.14em] text-muted-foreground">{teamName}</p>
+                          <div className="flex flex-wrap gap-1.5">
+                            {teamPlayers.map((p) => {
+                              const active = swapPick === p.id;
+                              return (
+                                <button
+                                  key={p.id}
+                                  type="button"
+                                  onClick={() => { if (!swapPick || swapPick === p.id) setSwapPick(active ? null : p.id); else swapPreviewPlayers(swapPick, p.id); }}
+                                  className={`flex items-center gap-1.5 rounded-lg border px-2 py-1.5 text-xs font-bold transition ${active ? 'border-primary bg-primary/15 text-primary ring-2 ring-primary/30' : 'border-border bg-muted/40 hover:border-primary/50'}`}
+                                >
+                                  <PlayerAvatar player={p} size="sm" />
+                                  {p.nickname}
+                                  <small className="text-[10px] font-black text-muted-foreground">{calcOverall(p)}</small>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <div className="mt-3 flex items-center justify-center gap-2 rounded-xl bg-muted/70 px-3 py-2 text-[10px] font-bold text-muted-foreground"><Menu className="size-3" /> {swapPick ? 'Agora toque no segundo jogador para trocá-los' : 'Arraste para ajustar a posição · toque em 2 jogadores para trocar de time'}</div>
                 </div>
               )}
             </div>
