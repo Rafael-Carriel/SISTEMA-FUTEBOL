@@ -303,8 +303,8 @@ export function FutApp({ orgId }: { orgId?: string }) {
   }, [previewTeams, players]);
   const previewBalance = useMemo(() => {
     if (!previewTeamAPlayers.length || !previewTeamBPlayers.length) return null;
-    return getTeamBalanceInfo(previewTeamAPlayers, previewTeamBPlayers);
-  }, [previewTeamAPlayers, previewTeamBPlayers]);
+    return getTeamBalanceInfo(previewTeamAPlayers.filter((p) => !benchIds.includes(p.id)), previewTeamBPlayers.filter((p) => !benchIds.includes(p.id)));
+  }, [previewTeamAPlayers, previewTeamBPlayers, benchIds]);
 
   /* ─── formações e banco ─── */
   const formationsForFormat = useMemo(() => listFormations(matchForm.format), [matchForm.format]);
@@ -1759,7 +1759,7 @@ export function FutApp({ orgId }: { orgId?: string }) {
               {!previewTeams ? (
                 <button type="button" disabled={isDrawingTeams} onClick={previewDraft} className={`draft-trigger ${isDrawingTeams ? 'drawing' : ''}`}>
                   <span className="draft-trigger-icon"><Swords /></span>
-                  <span><b>{isDrawingTeams ? 'Sorteando os times…' : 'Sortear times agora'}</b><small>{isDrawingTeams ? 'Analisando posições e atributos' : 'Equilíbrio automático por posição e overall'}</small></span>
+                  <span><b>{isDrawingTeams ? 'Equilibrando os times…' : 'Equilibrar times agora'}</b><small>{isDrawingTeams ? 'Analisando posições e atributos' : 'Equilíbrio por posição e cada atributo'}</small></span>
                   <ChevronRight />
                 </button>
               ) : (
@@ -1767,11 +1767,22 @@ export function FutApp({ orgId }: { orgId?: string }) {
                   <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
                     <div><p className="text-[10px] font-black uppercase tracking-[.18em] text-primary">Escalação pronta</p><h3 className="mt-0.5 text-base font-black">Quadro tático</h3></div>
                     <div className="flex items-center gap-2">
-                      {previewBalance && <span className="balance-chip"><Check /> {previewBalance.percentage}% equilibrado</span>}
-                      <button onClick={previewDraft} className="rounded-xl border border-border bg-background px-3 py-2 text-xs font-semibold transition hover:border-primary hover:text-primary"><Sparkles className="mr-1 inline size-3.5" /> Sortear novamente</button>
+                      {previewBalance && <span className="balance-chip"><Check /> {previewBalance.percentage}% de equilíbrio</span>}
+                      <button onClick={previewDraft} className="rounded-xl border border-border bg-background px-3 py-2 text-xs font-semibold transition hover:border-primary hover:text-primary"><Sparkles className="mr-1 inline size-3.5" /> Reequilibrar times</button>
                       <button onClick={() => { setPreviewTeams(null); setSwapPick(null); setDragPositions({}); }} className="grid size-8 place-items-center rounded-xl text-muted-foreground hover:bg-muted hover:text-foreground" aria-label="Limpar sorteio"><X className="size-4" /></button>
                     </div>
                   </div>
+                  {previewBalance && <div className="mb-4 rounded-2xl border bg-background/70 p-3">
+                    <p className={`mb-2 text-xs font-bold ${previewBalance.color}`}>{previewBalance.label}</p>
+                    <p className="mb-2 text-[11px] text-muted-foreground">Médias dos jogadores de linha · Verde / Branco</p>
+                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                      {previewBalance.attributes.map((attribute) => <div key={attribute.key} className="rounded-lg bg-muted/60 px-2 py-2">
+                        <p className="text-[10px] font-semibold text-muted-foreground">{attribute.label}</p>
+                        <p className="text-sm font-black tabular-nums"><span className="text-emerald-600 dark:text-emerald-400">{Math.round(attribute.teamA)}</span> / <span className="text-blue-600 dark:text-blue-400">{Math.round(attribute.teamB)}</span></p>
+                      </div>)}
+                    </div>
+                    {previewBalance.unratedCount > 0 && <p className="mt-2 text-xs text-amber-700 dark:text-amber-300">{previewBalance.unratedCount} jogador(es) sem avaliação: usando nota 50 como estimativa. Ajuste os atributos para melhorar a divisão.</p>}
+                  </div>}
                   <DraggablePitch
                     teamA={previewTeamAPlayers.filter((p) => !validBench.includes(p.id))}
                     teamB={previewTeamBPlayers.filter((p) => !validBench.includes(p.id))}

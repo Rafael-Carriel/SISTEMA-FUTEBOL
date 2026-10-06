@@ -80,3 +80,71 @@ describe('getTeamBalanceInfo', () => {
     expect(getTeamBalanceInfo([], []).percentage).toBe(100);
   });
 });
+
+
+describe('equilíbrio por perfil', () => {
+  it('divide velocidade, força, defesa e drible mesmo com overall igual', () => {
+    const players = [
+      makePlayer({ id: 'a', pace: 99, strength: 1, defending: 1, dribbling: 99 }),
+      makePlayer({ id: 'b', pace: 1, strength: 99, defending: 99, dribbling: 1 }),
+      makePlayer({ id: 'c', pace: 1, strength: 99, defending: 99, dribbling: 1 }),
+      makePlayer({ id: 'd', pace: 99, strength: 1, defending: 1, dribbling: 99 }),
+    ];
+    const lookup = new Map(players.map((p) => [p.id, p]));
+    const result = balancedTeamsSmart(players.map((p) => p.id), (id) => lookup.get(id));
+    const a = result.teamA.map((id) => lookup.get(id)!);
+    const b = result.teamB.map((id) => lookup.get(id)!);
+    expect(getTeamBalanceInfo(a, b).attributes.every((item) => item.difference === 0)).toBe(true);
+  });
+
+  it('não considera perfis opostos equilibrados só porque o overall coincide', () => {
+    const a = makePlayer({ id: 'a', pace: 99, defending: 1 });
+    const b = makePlayer({ id: 'b', pace: 1, defending: 99 });
+    expect(getTeamBalanceInfo([a], [b]).percentage).toBeLessThan(78);
+  });
+
+  it('mantém cada posição distribuída e é independente da ordem de seleção', () => {
+    const players = Array.from({ length: 15 }, (_, i) => makePlayer({ id: String(i), position: (['GOL', 'ZAG', 'MEI', 'ATA'] as const)[i % 4], pace: 35 + i * 4 }));
+    const lookup = new Map(players.map((p) => [p.id, p]));
+    const ids = players.map((p) => p.id);
+    const result = balancedTeamsSmart(ids, (id) => lookup.get(id));
+    expect(result).toEqual(balancedTeamsSmart([...ids].reverse(), (id) => lookup.get(id)));
+    expect(result.teamA.length).toBe(8);
+    expect(result.teamB.length).toBe(7);
+    for (const role of ['GOL', 'ZAG', 'MEI', 'ATA']) {
+      const count = (team: string[]) => team.filter((id) => lookup.get(id)!.position === role).length;
+      expect(Math.abs(count(result.teamA) - count(result.teamB))).toBeLessThanOrEqual(1);
+    }
+  });
+
+  it('usa estimativa neutra para avulso sem atributos e informa a limitação', () => {
+    const avulso = makePlayer({ id: 'avulso', pace: 0, shooting: 0, passing: 0, defending: 0, resistance: 0, strength: 0, dribbling: 0, goalkeeping: 0 });
+    const info = getTeamBalanceInfo([avulso], [makePlayer({ id: 'regular', pace: 50, shooting: 50, passing: 50, defending: 50, resistance: 50, strength: 50, dribbling: 50 })]);
+    expect(info.percentage).toBe(100);
+    expect(info.unratedCount).toBe(1);
+  });
+
+  it('também distribui elencos grandes sem perder jogadores ou posições', () => {
+    const players = Array.from({ length: 25 }, (_, i) => makePlayer({ id: String(i), position: (['GOL', 'ZAG', 'MEI', 'ATA'] as const)[i % 4], pace: 30 + i * 2 }));
+    const lookup = new Map(players.map((p) => [p.id, p]));
+    const result = balancedTeamsSmart(players.map((p) => p.id), (id) => lookup.get(id));
+    expect(new Set([...result.teamA, ...result.teamB]).size).toBe(25);
+    expect(result.teamA.length).toBe(13);
+    expect(result.teamB.length).toBe(12);
+    for (const role of ['GOL', 'ZAG', 'MEI', 'ATA']) {
+      const count = (team: string[]) => team.filter((id) => lookup.get(id)!.position === role).length;
+      expect(Math.abs(count(result.teamA) - count(result.teamB))).toBeLessThanOrEqual(1);
+    }
+  });
+});
+
+
+it('equilibra 22 jogadores e distribui a habilidade dos goleiros', () => {
+  const players = Array.from({ length: 22 }, (_, i) => makePlayer({ id: String(i), position: i < 2 ? 'GOL' : 'MEI', pace: 30 + (i * 17) % 70, defending: 25 + (i * 11) % 70, dribbling: 20 + (i * 19) % 79, goalkeeping: i === 0 ? 90 : 70 }));
+  const lookup = new Map(players.map((p) => [p.id, p]));
+  const result = balancedTeamsSmart(players.map((p) => p.id), (id) => lookup.get(id));
+  expect(result.teamA.length).toBe(11);
+  expect(result.teamB.length).toBe(11);
+  expect(result.teamA.filter((id) => lookup.get(id)!.position === 'GOL')).toHaveLength(1);
+  expect(result.teamB.filter((id) => lookup.get(id)!.position === 'GOL')).toHaveLength(1);
+});
