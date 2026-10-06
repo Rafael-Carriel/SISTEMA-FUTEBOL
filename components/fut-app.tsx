@@ -2,19 +2,19 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { arrayUnion, collection, deleteDoc, deleteField, doc, getDocs, increment, onSnapshot, query, setDoc, updateDoc, where, writeBatch } from 'firebase/firestore';
-import { Activity, BadgeDollarSign, CalendarDays, Camera, Check, ChevronRight, CircleDollarSign, Download, Expand, Frown, Goal, ImageDown, LayoutDashboard, Medal, Menu, Monitor, Moon, Pencil, Plus, RectangleVertical, Repeat, Save, Shield, ShieldCheck, Shirt, Sparkles, Sun, Swords, Target, Trash2, Trophy, UserPlus, Users, WalletCards, X } from 'lucide-react';
+import { Activity, BadgeDollarSign, CalendarDays, Camera, Check, ChevronRight, CircleDollarSign, Download, Expand, Frown, Goal, ImageDown, LayoutDashboard, Medal, Menu, Monitor, Moon, Pencil, Plus, RectangleVertical, Repeat, Save, Share2, Shield, ShieldCheck, Shirt, Sparkles, Sun, Swords, Target, Trash2, Trophy, UserPlus, Users, WalletCards, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { db } from '@/lib/firebase';
 import { demoMatches, demoPayments, demoPlayers } from '@/lib/demo-data';
 import type { FieldPositions, Match, MatchEvent, MatchEventType, MatchFormat, Payment, Player, PlayerStats, Position } from '@/lib/fut-types';
-import { FullPitchView, PitchView } from '@/components/pitch-view';
+import { PitchView } from '@/components/pitch-view';
 import { DraggablePitch } from '@/components/draggable-pitch';
 import { LiveManager } from '@/components/live-manager';
 import { balancedTeamsSmart, getTeamBalanceInfo, uniqueLineupPlayers } from '@/lib/team-balancer';
 import { listFormations } from '@/lib/formation-layout';
-import { exportLineup } from '@/lib/lineup-export';
+import { buildLineupImage, exportLineup, type LineupExportResult } from '@/lib/lineup-export';
 import { calcOverall, normalizePlayer, RATING_FIELDS, ratingWeights } from '@/lib/player-rating';
 
 /* ─── constants & helpers ─── */
@@ -221,6 +221,47 @@ export function FutApp({ orgId }: { orgId?: string }) {
   const stats = useMemo(() => calculateStats(players, matches), [players, matches]);
   const activeMatch = matches.find((match) => match.id === activeMatchId) || matches[0];
   const expandedMatch = matches.find((match) => match.id === expandedMatchId);
+  const [lineupImage, setLineupImage] = useState<LineupExportResult | null>(null);
+  const [lineupFile, setLineupFile] = useState<File | null>(null);
+  const [lineupError, setLineupError] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    setLineupImage(null);
+    setLineupFile(null);
+    setLineupError(false);
+    if (!expandedMatch) return;
+    buildLineupImage(expandedMatch, players, { format: 'png' }).then(async (result) => {
+      const blob = await (await fetch(result.dataUrl)).blob();
+      if (cancelled) return;
+      setLineupImage(result);
+      setLineupFile(new File([blob], result.fileName, { type: 'image/png' }));
+    }).catch(() => { if (!cancelled) setLineupError(true); });
+    return () => { cancelled = true; };
+  }, [expandedMatch, players]);
+
+  function downloadPreparedLineup() {
+    if (!lineupImage) return;
+    const link = document.createElement('a');
+    link.download = lineupImage.fileName;
+    link.href = lineupImage.dataUrl;
+    link.click();
+    showNotice('PNG baixado! Anexe a imagem na conversa do WhatsApp.');
+  }
+
+  async function sharePreparedLineup() {
+    if (!lineupFile || !expandedMatch) return;
+    if (!navigator.canShare?.({ files: [lineupFile] })) {
+      downloadPreparedLineup();
+      return;
+    }
+    try {
+      await navigator.share({ files: [lineupFile], title: expandedMatch.title });
+    } catch (error) {
+      if (error instanceof Error && error.name === 'AbortError') return;
+      showNotice('Não foi possível compartilhar. Use Baixar PNG para enviar no WhatsApp.');
+    }
+  }
+
   const activePlayerStats = stats.find((item) => item.player.id === activePlayerId) || stats[0];
   const liveMatch = matches.find((match) => match.status === 'live');
   const paidPayments = payments.filter((payment) => payment.month === monthKey && payment.paid);
@@ -1080,7 +1121,7 @@ export function FutApp({ orgId }: { orgId?: string }) {
               <>
               <div className="mt-4 flex justify-center">
                 <Button variant="outline" size="sm" onClick={() => setExpandedMatchId(match.id)} className="expand-pitch-button">
-                  <Expand className="size-4" /> Ver campo inteiro
+                  <Expand className="size-4" /> Ver e exportar times
                 </Button>
               </div>
               <div className="match-lineup-layout">
@@ -1143,13 +1184,14 @@ export function FutApp({ orgId }: { orgId?: string }) {
 
   /* ─── PLAYERS VIEW ─── */
   const playersView = () => <div>
-    <div className="mb-4 flex items-center gap-3">
-      <Button variant="outline" size="sm" onClick={() => setShowAvulsoForm(!showAvulsoForm)}>
+    <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border bg-card p-4">
+      <div><p className="font-black">Elenco do fut</p><p className="text-xs text-muted-foreground">Cadastre também quem joga só uma partida.</p></div>
+      <Button size="sm" onClick={() => setShowAvulsoForm(!showAvulsoForm)}>
         <UserPlus className="size-4" /> {showAvulsoForm ? 'Cancelar' : 'Adicionar avulso'}
       </Button>
     </div>
     {showAvulsoForm && <div className="mb-4 space-y-2 rounded-xl border p-3">
-      <Input placeholder="Nome do avulso" value={avulsoName} onChange={(e) => setAvulsoName(e.target.value)} className="w-full" autoFocus />
+      <label className="form-label">Nome do avulso<Input placeholder="Como a galera chama ele?" value={avulsoName} onChange={(e) => setAvulsoName(e.target.value)} className="w-full" onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void addAvulso(); } }} /></label>
       <div className="flex gap-2">
         <select value={avulsoMatchId} onChange={(e) => setAvulsoMatchId(e.target.value)} className="form-control h-9 flex-1 text-xs">
           <option value="">Sem jogo específico</option>
@@ -1162,7 +1204,7 @@ export function FutApp({ orgId }: { orgId?: string }) {
           <input type="number" value={avulsoValue} onChange={(e) => setAvulsoValue(Number(e.target.value) || 0)} className="w-10 bg-transparent text-xs font-bold outline-none" min={0} />
         </div>
       </div>
-      <Button size="sm" onClick={addAvulso} className="w-full"><Check className="size-4" /> Adicionar avulso</Button>
+      <Button size="sm" disabled={!avulsoName.trim()} onClick={addAvulso} className="w-full"><Check className="size-4" /> Adicionar avulso</Button>
     </div>}
     <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">{[...stats].sort((a, b) => b.overall - a.overall).map((item) => <div key={item.player.id} className="group player-card relative">
       <button onClick={() => { setActivePlayerId(item.player.id); setDialog('playerCard'); }} className="w-full text-left">
@@ -1875,27 +1917,18 @@ export function FutApp({ orgId }: { orgId?: string }) {
       {/* Full-pitch lineup dialog */}
       <Dialog open={Boolean(expandedMatch)} onOpenChange={(open) => !open && setExpandedMatchId(null)}>
         <DialogContent className="full-pitch-dialog" aria-label="Escalação em campo inteiro">
-          {expandedMatch && (() => {
-            const teamAPlayers = expandedMatch.teamA.map((id) => playerById(id)).filter(Boolean) as Player[];
-            const teamBPlayers = expandedMatch.teamB.map((id) => playerById(id)).filter(Boolean) as Player[];
-            return <>
-              <DialogHeader className="full-pitch-dialog-header">
-                <div><p>Modo campo inteiro · {expandedMatch.format || 'F7'}</p><DialogTitle>{expandedMatch.title}</DialogTitle><DialogDescription>{expandedMatch.venue} · {formatDate(expandedMatch.date)} às {expandedMatch.time}</DialogDescription></div>
-                <div className="expanded-score"><span>{expandedMatch.teamAName}</span><strong>{expandedMatch.scoreA} <i>×</i> {expandedMatch.scoreB}</strong><span>{expandedMatch.teamBName}</span></div>
-              </DialogHeader>
-              <div className="full-pitch-scroll">
-                <FullPitchView
-                  teamA={teamAPlayers}
-                  teamB={teamBPlayers}
-                  teamAName={expandedMatch.teamAName}
-                  teamBName={expandedMatch.teamBName}
-                  format={expandedMatch.format || 'F7'}
-                  goalkeeperAId={expandedMatch.goalkeeperAId}
-                  goalkeeperBId={expandedMatch.goalkeeperBId}
-                />
-              </div>
-            </>;
-          })()}
+          {expandedMatch && <>
+            <DialogHeader className="full-pitch-dialog-header">
+              <div><p>Pronto para o grupo · {expandedMatch.format || 'F7'}</p><DialogTitle>{expandedMatch.title}</DialogTitle><DialogDescription>{expandedMatch.venue} · {formatDate(expandedMatch.date)} às {expandedMatch.time}</DialogDescription></div>
+            </DialogHeader>
+            <div className="full-pitch-scroll lineup-preview-scroll">
+              {lineupImage ? <img src={lineupImage.dataUrl} alt={`Escalação de ${expandedMatch.teamAName} e ${expandedMatch.teamBName}`} className="lineup-export-preview" /> : <div className="lineup-preview-loading" role="status">{lineupError ? 'Não foi possível gerar a imagem. Feche e abra novamente para tentar.' : 'Preparando a escalação…'}</div>}
+            </div>
+            <div className="lineup-export-actions">
+              <p>Imagem em alta resolução para mandar no WhatsApp.</p>
+              <div><Button disabled={!lineupImage} onClick={downloadPreparedLineup}><Download className="size-4" /> Baixar PNG</Button><Button variant="outline" className="border-white/20 bg-white/5 text-white hover:bg-white/10 hover:text-white" disabled={!lineupFile} onClick={sharePreparedLineup}><Share2 className="size-4" /> Compartilhar</Button></div>
+            </div>
+          </>}
         </DialogContent>
       </Dialog>
 

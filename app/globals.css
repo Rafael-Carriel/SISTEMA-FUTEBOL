@@ -501,3 +501,16 @@ body {
 .payment-row > div:last-child { margin-left: auto; flex-wrap: wrap; }
 .payment-row b, .payment-row p { overflow-wrap: anywhere; }
 @media (max-width: 420px) { .payment-row > div:last-child { width: 100%; justify-content: flex-end; } }
+
+/* The preview uses the exported artwork so the shared PNG matches the screen. */
+.full-pitch-dialog { display: flex; flex-direction: column; width: min(760px, calc(100% - 1rem)); max-width: calc(100% - 1rem); height: min(920px, 94dvh); }
+.full-pitch-dialog-header { display: block; }
+.full-pitch-dialog-header [data-slot='dialog-description'] { font-size: 12px; font-weight: 400; text-transform: none; letter-spacing: normal; }
+.lineup-preview-scroll { padding: 16px; }
+.lineup-export-preview { display: block; width: 100%; max-width: 540px; height: auto; margin: 0 auto; border-radius: 16px; box-shadow: 0 12px 40px #0006; }
+.lineup-preview-loading { display: grid; min-height: 200px; place-items: center; text-align: center; color: #c0d0c5; }
+.lineup-export-actions { flex-shrink: 0; padding: 14px 20px; background: #0d2117; border-top: 1px solid #ffffff18; }
+.lineup-export-actions p { margin-bottom: 10px; font-size: 12px; color: #a9bcb0; }
+.lineup-export-actions > div { display: flex; flex-wrap: wrap; gap: 8px; }
+.lineup-export-actions button { flex: 1; min-width: 140px; }
+.lineup-export-actions button[data-variant='outline'] { color: white; }
