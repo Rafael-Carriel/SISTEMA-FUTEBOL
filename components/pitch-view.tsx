@@ -5,6 +5,7 @@ import { Activity, Radio, Sparkles } from 'lucide-react';
 import type { MatchFormat, Player } from '@/lib/fut-types';
 import { assignFormationPositions } from '@/lib/formation-layout';
 import { calcOverall } from '@/lib/player-rating';
+import { readableTextColor, teamAccent } from '@/lib/color-utils';
 
 /* ─── helpers ─── */
 function initials(player: Player): string {
@@ -100,19 +101,28 @@ function FullFieldLines() {
 }
 
 function FullFieldPlayer({ player, x, y, teamColor, goalkeeper, index }: { player: Player; x: number; y: number; teamColor: string; goalkeeper: boolean; index: number }) {
+  const ink = readableTextColor(teamColor);
   return (
     <div
       className="full-field-player lineup-player premium-player pointer-events-none absolute flex flex-col items-center"
       style={{ left: `${x}%`, top: `${y}%`, transform: 'translate(-50%,-50%)', '--team-color': teamColor, animationDelay: `${100 + index * 55}ms` } as React.CSSProperties}
     >
       <div className="player-orbit relative">
-        <span className="full-field-avatar relative grid place-items-center overflow-hidden rounded-full border-2 border-white font-black text-white" style={{ background: teamColor }}>
-          {player.photoUrl ? <img src={player.photoUrl} alt="" className="size-full object-cover" /> : initials(player)}
+        <span
+          className="full-field-avatar relative grid place-items-center overflow-hidden rounded-full border-[3px] border-white font-black"
+          style={{ background: teamColor, color: ink, textShadow: ink === '#ffffff' ? '0 1px 3px rgba(0,0,0,.6)' : 'none' }}
+        >
+          {player.photoUrl ? <img src={player.photoUrl} alt="" className="size-full object-cover object-top" /> : initials(player)}
         </span>
-        <span className="full-field-number absolute -bottom-1 -right-1 grid place-items-center rounded-full border-2 border-white font-black text-white" style={{ background: teamColor }}>{player.number}</span>
-        {goalkeeper && <span className="absolute -left-1 -top-1 grid size-5 place-items-center rounded-full border-2 border-white bg-[#07130d] text-[8px] font-black text-primary">G</span>}
+        <span
+          className="full-field-number absolute -bottom-1 -right-1 grid place-items-center rounded-full font-black tabular-nums"
+          style={{ background: '#ffffff', color: '#0b1710', boxShadow: `0 0 0 2px ${teamColor}, 0 6px 14px rgba(0,0,0,.55)` }}
+        >
+          {player.number}
+        </span>
+        {goalkeeper && <span className="absolute -left-1 -top-1 grid size-5 place-items-center rounded-full border-2 border-white bg-[#07130d] text-[9px] font-black text-primary">G</span>}
       </div>
-      <span className="full-field-name max-w-24 truncate rounded-md bg-black/70 px-2 py-1 text-center font-black text-white backdrop-blur-sm">{player.nickname}</span>
+      <span className="full-field-name text-center" title={`${player.nickname} #${player.number}`}>{player.nickname}</span>
     </div>
   );
 }
@@ -121,11 +131,12 @@ function PitchHalf({ teamName, teamColor, players, w, h, compact, flip, format, 
   const teamOverall = players.length
     ? Math.round(players.reduce((sum, item) => sum + calcOverall(item.player), 0) / players.length)
     : 0;
+  const ink = readableTextColor(teamColor);
   return (
     <div className="premium-lineup-card lineup-team flex w-full max-w-[300px] flex-col gap-3" style={{ '--team-color': teamColor } as React.CSSProperties}>
       <div className="premium-team-header flex w-full items-center gap-2">
         <span className="size-2.5 rounded-full shadow-[0_0_14px_currentColor]" style={{ color: teamColor, background: teamColor }} />
-        <div className="min-w-0 flex-1"><h4 className="truncate text-xs font-black uppercase tracking-wider" style={{ color: teamColor }}>{teamName}</h4><p className="text-[9px] font-bold text-white/40">{players.length} titulares · {format}</p></div>
+        <div className="min-w-0 flex-1"><h4 className="truncate text-sm font-black uppercase tracking-wider" style={{ color: teamAccent(teamColor) }}>{teamName}</h4><p className="text-[11px] font-semibold text-white/65">{players.length} titulares · {format}</p></div>
         <span className="team-power"><Activity className="size-3" /> {teamOverall}</span>
       </div>
       <div className="pitch-stage">
@@ -156,28 +167,47 @@ function PitchHalf({ teamName, teamColor, players, w, h, compact, flip, format, 
             >
               <div className="player-orbit relative">
                 <span
-                  className="relative grid size-9 place-items-center overflow-hidden rounded-full border-2 text-[9px] font-black"
-                  style={{ background: teamColor, borderColor: '#fff', color: '#fff', boxShadow: `0 0 0 4px ${teamColor}25, 0 10px 24px rgba(0,0,0,.48), inset 0 1px 0 rgba(255,255,255,.45)` }}
+                  className="relative grid place-items-center overflow-hidden rounded-full border-[3px] border-white font-black"
+                  style={{
+                    width: compact ? 36 : 42,
+                    height: compact ? 36 : 42,
+                    fontSize: compact ? 12 : 14,
+                    background: teamColor,
+                    color: ink,
+                    textShadow: ink === '#ffffff' ? '0 1px 3px rgba(0,0,0,.6)' : 'none',
+                    boxShadow: `0 0 0 4px ${teamColor}2e, 0 10px 24px rgba(0,0,0,.48)`,
+                  }}
                 >
                   {player.photoUrl ? (
-                    <img src={player.photoUrl} alt="" className="h-full w-full object-cover" />
+                    <img src={player.photoUrl} alt="" className="h-full w-full object-cover object-top" />
                   ) : (
                     initials(player)
                   )}
                 </span>
                 <span
-                  className="absolute -bottom-1 -right-1 grid size-[18px] place-items-center rounded-full border-2 text-[7px] font-black text-white"
-                  style={{ background: teamColor, borderColor: '#fff' }}
+                  className="absolute -bottom-1 -right-1 grid place-items-center rounded-full font-black tabular-nums"
+                  style={{
+                    width: compact ? 17 : 20,
+                    height: compact ? 17 : 20,
+                    fontSize: compact ? 9 : 10,
+                    background: '#ffffff',
+                    color: '#0b1710',
+                    boxShadow: `0 0 0 2px ${teamColor}, 0 4px 10px rgba(0,0,0,.5)`,
+                  }}
                 >
                   {player.number}
                 </span>
                 {isGoalkeeper && (
-                  <span className="absolute -left-1 -top-1 grid size-[18px] place-items-center rounded-full border-2 border-white bg-surface-inverse text-[7px] font-black text-primary" title="Goleiro atual">
+                  <span className="absolute -left-1 -top-1 grid size-[18px] place-items-center rounded-full border-2 border-white bg-surface-inverse text-[9px] font-black text-primary" title="Goleiro atual">
                     G
                   </span>
                 )}
               </div>
-              <span className="mt-1 max-w-[72px] truncate text-center font-bold text-white drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)]" style={{ fontSize: compact ? '8px' : '9px', lineHeight: '1' }} title={`${player.nickname} #${player.number}`}>
+              <span
+                className="text-center"
+                style={{ fontSize: compact ? 10 : 11, lineHeight: 1.15 }}
+                title={`${player.nickname} #${player.number}`}
+              >
                 {player.nickname}
               </span>
             </div>

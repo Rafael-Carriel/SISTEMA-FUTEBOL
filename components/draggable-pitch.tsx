@@ -5,6 +5,7 @@ import { Activity, GripVertical, MousePointer2, Sparkles } from 'lucide-react';
 import type { Player, MatchFormat, FieldPositions } from '@/lib/fut-types';
 import { assignFormationPositions } from '@/lib/formation-layout';
 import { calcOverall } from '@/lib/player-rating';
+import { readableTextColor } from '@/lib/color-utils';
 
 /* ─── helpers ─── */
 function initials(player: Player): string {
@@ -139,9 +140,10 @@ function DraggablePlayer({
   const playerRef = useRef<HTMLDivElement>(null);
 
   const size = compact ? 42 : 52;
-  const nameFontSize = compact ? '10px' : '12px';
-  const badgeSize = compact ? 16 : 20;
-  const numberFontSize = compact ? '8px' : '9px';
+  const nameFontSize = compact ? 10 : 12;
+  const badgeSize = compact ? 18 : 21;
+  const numberFontSize = compact ? 9 : 10;
+  const ink = readableTextColor(teamColor);
 
   const handlePointerDown = useCallback(
     (e: React.PointerEvent) => {
@@ -222,31 +224,32 @@ function DraggablePlayer({
     >
       <div className="player-orbit relative" style={{ '--team-color': teamColor } as React.CSSProperties}>
         <span
-          className="relative grid place-items-center overflow-hidden rounded-full border-2 font-black select-none"
+          className="relative grid place-items-center overflow-hidden rounded-full border-[3px] border-white font-black select-none"
           style={{
             width: size,
             height: size,
-            fontSize: compact ? '11px' : '14px',
+            fontSize: compact ? 13 : 15,
             background: teamColor,
-            borderColor: '#fff',
-            color: '#fff',
-            boxShadow: `0 0 0 4px ${teamColor}25, 0 10px 24px rgba(0,0,0,.48), inset 0 1px 0 rgba(255,255,255,.45)`,
+            color: ink,
+            textShadow: ink === '#ffffff' ? '0 1px 3px rgba(0,0,0,.6)' : 'none',
+            boxShadow: `0 0 0 4px ${teamColor}33, 0 12px 24px rgba(0,0,0,.5)`,
           }}
         >
           {player.photoUrl ? (
-            <img src={player.photoUrl} alt="" className="h-full w-full object-cover" />
+            <img src={player.photoUrl} alt="" className="h-full w-full object-cover object-top" />
           ) : (
             initials(player)
           )}
         </span>
         <span
-          className="absolute -bottom-1 -right-1 grid place-items-center rounded-full border-2 font-black text-white select-none"
+          className="absolute -bottom-1 -right-1 grid place-items-center rounded-full font-black tabular-nums select-none"
           style={{
             width: badgeSize,
             height: badgeSize,
             fontSize: numberFontSize,
-            background: teamColor,
-            borderColor: '#fff',
+            background: '#ffffff',
+            color: '#0b1710',
+            boxShadow: `0 0 0 2px ${teamColor}, 0 4px 10px rgba(0,0,0,.5)`,
           }}
         >
           {player.number}
@@ -259,8 +262,8 @@ function DraggablePlayer({
         )}
       </div>
       <span
-        className="mt-1 max-w-[72px] truncate text-center font-bold select-none drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)]"
-        style={{ fontSize: compact ? '8px' : nameFontSize, color: '#fff', lineHeight: '1' }}
+        className="mt-1.5 max-w-[96px] truncate rounded-full bg-black/85 px-2 py-[3px] text-center font-semibold leading-none tracking-tight text-white ring-1 ring-white/15 backdrop-blur-sm select-none"
+        style={{ fontSize: nameFontSize }}
         title={`${player.nickname} #${player.number} · ${player.position}`}
       >
         {player.nickname}

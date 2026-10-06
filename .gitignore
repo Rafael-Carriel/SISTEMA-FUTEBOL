@@ -46,3 +46,7 @@ next-env.d.ts
 .firebase/
 .wrangler/
 
+# ferramentas locais de sessão (não fazem parte do app)
+.claude/
+.playwright-mcp/
+

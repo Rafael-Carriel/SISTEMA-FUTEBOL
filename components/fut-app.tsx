@@ -13,6 +13,7 @@ import { FullPitchView, PitchView } from '@/components/pitch-view';
 import { DraggablePitch } from '@/components/draggable-pitch';
 import { LiveManager } from '@/components/live-manager';
 import { balancedTeamsSmart, getTeamBalanceInfo, uniqueLineupPlayers } from '@/lib/team-balancer';
+import { listFormations } from '@/lib/formation-layout';
 import { exportLineup } from '@/lib/lineup-export';
 import { calcOverall, normalizePlayer, RATING_FIELDS, ratingWeights } from '@/lib/player-rating';
 
@@ -41,6 +42,7 @@ const viewTitles: Record<View, [string, string, string]> = {
 
 const FORMAT_OPTIONS: { value: MatchFormat; label: string; players: number }[] = [
   { value: 'F5', label: 'Futsal (5)', players: 5 },
+  { value: 'F6', label: 'Fut6 (6)', players: 6 },
   { value: 'F7', label: 'Fut7 (7)', players: 7 },
   { value: 'F11', label: 'Campo (11)', players: 11 },
 ];
@@ -136,6 +138,9 @@ export function FutApp({ orgId }: { orgId?: string }) {
   const [rankingTab, setRankingTab] = useState<RankingTab>('goals');
   const [previewTeams, setPreviewTeams] = useState<{ teamA: string[]; teamB: string[] } | null>(null);
   const [swapPick, setSwapPick] = useState<string | null>(null);
+  const [benchIds, setBenchIds] = useState<string[]>([]);
+  const [formationA, setFormationA] = useState<string>('');
+  const [formationB, setFormationB] = useState<string>('');
   const [dragPositions, setDragPositions] = useState<FieldPositions>({});
   const [showLiveManager, setShowLiveManager] = useState(false);
   const [exportFormat, setExportFormat] = useState<'png' | 'jpeg'>('png');
@@ -260,6 +265,43 @@ export function FutApp({ orgId }: { orgId?: string }) {
     return getTeamBalanceInfo(previewTeamAPlayers, previewTeamBPlayers);
   }, [previewTeamAPlayers, previewTeamBPlayers]);
 
+  /* ─── formações e banco ─── */
+  const formationsForFormat = useMemo(() => listFormations(matchForm.format), [matchForm.format]);
+  const resolvedFormationA = formationA || formationsForFormat[0].id;
+  const resolvedFormationB = formationB || formationsForFormat[0].id;
+  /** Reservas só contam se ainda estiverem entre os confirmados. */
+  const validBench = useMemo(
+    () => benchIds.filter((id) => matchForm.selected.includes(id)),
+    [benchIds, matchForm.selected],
+  );
+  /** Um time precisa de goleiro para a escalação fazer sentido. */
+  const teamHasKeeper = (ids: string[]) => ids.some((id) => playerById(id)?.position === 'GOL');
+
+  function toggleBench(playerId: string) {
+    setBenchIds((current) => {
+      const goingToBench = !current.includes(playerId);
+      if (goingToBench) {
+        // sai do quadro tático: se ficar, ele apareceria em campo e no banco
+        setPreviewTeams((teams) =>
+          teams
+            ? {
+                teamA: teams.teamA.filter((id) => id !== playerId),
+                teamB: teams.teamB.filter((id) => id !== playerId),
+              }
+            : teams,
+        );
+        setDragPositions((positions) => {
+          const next = { ...positions };
+          delete next[playerId];
+          return next;
+        });
+        return [...current, playerId];
+      }
+      return current.filter((id) => id !== playerId);
+    });
+    setSwapPick(null);
+  }
+
   function previewDraft() {
     if (matchForm.selected.length < 2) { showNotice('Selecione pelo menos 2 jogadores.'); return; }
     const uniqueIds = uniqueLineupPlayers(matchForm.selected, (id) => playerById(id)).map((player) => player.id);
@@ -267,6 +309,7 @@ export function FutApp({ orgId }: { orgId?: string }) {
     setIsDrawingTeams(true);
     setPreviewTeams(null);
     setSwapPick(null);
+    setBenchIds([]);
     setDragPositions({});
     window.setTimeout(() => {
       setPreviewTeams(balancedTeamsSmart(uniqueIds, (id) => playerById(id)));
@@ -304,8 +347,11 @@ export function FutApp({ orgId }: { orgId?: string }) {
         date: matchForm.date,
         time: matchForm.time,
         format: matchForm.format,
-        teamA: teams.teamA,
-        teamB: teams.teamB,
+        teamA: teams.teamA.filter((id) => !validBench.includes(id)),
+        teamB: teams.teamB.filter((id) => !validBench.includes(id)),
+        formationA: resolvedFormationA,
+        formationB: resolvedFormationB,
+        bench: validBench,
         fieldPositions: hasPositions ? dragPositions : undefined,
       };
       try { await updateDoc(doc(db, 'matches', editingMatchId), update); } catch { setMatches((all) => all.map((m) => m.id === editingMatchId ? { ...m, ...update } : m)); }
@@ -318,9 +364,14 @@ export function FutApp({ orgId }: { orgId?: string }) {
       const match: Match = {
         id, title: matchForm.title || 'Fut da galera', venue: matchForm.venue, date: matchForm.date, time: matchForm.time,
         status: 'scheduled', teamAName: 'Time Verde', teamBName: 'Time Branco',
-        teamA: teams.teamA, teamB: teams.teamB, scoreA: 0, scoreB: 0, events: [],
+        teamA: teams.teamA.filter((playerId) => !validBench.includes(playerId)),
+        teamB: teams.teamB.filter((playerId) => !validBench.includes(playerId)),
+        scoreA: 0, scoreB: 0, events: [],
         createdAt: new Date().toISOString(),
         format: matchForm.format,
+        formationA: resolvedFormationA,
+        formationB: resolvedFormationB,
+        bench: validBench,
         fieldPositions: hasPositions ? dragPositions : undefined,
       };
       try { await setDoc(doc(db, 'matches', id), withOrg(match)); } catch { setMatches((all) => [match, ...all]); }
@@ -329,7 +380,7 @@ export function FutApp({ orgId }: { orgId?: string }) {
   }
 
   function openEditMatch(match: Match) {
-    const allPlayerIds = [...new Set([...match.teamA, ...match.teamB])];
+    const allPlayerIds = [...new Set([...match.teamA, ...match.teamB, ...(match.bench ?? [])])];
     setMatchForm({
       title: match.title,
       venue: match.venue,
@@ -339,6 +390,9 @@ export function FutApp({ orgId }: { orgId?: string }) {
       format: match.format || 'F7',
     });
     setPreviewTeams({ teamA: match.teamA, teamB: match.teamB });
+    setBenchIds(match.bench ?? []);
+    setFormationA(match.formationA ?? '');
+    setFormationB(match.formationB ?? '');
     setDragPositions(match.fieldPositions || {});
     setEditingMatchId(match.id);
     setDialog('match');
@@ -518,8 +572,12 @@ export function FutApp({ orgId }: { orgId?: string }) {
 
   /* ─── Export lineup ─── */
   async function handleExportLineup(match: Match) {
-    await exportLineup(match, players, { format: exportFormat });
-    showNotice('Escalação exportada!');
+    try {
+      const result = await exportLineup(match, players, { format: exportFormat });
+      showNotice(result ? 'Escalação exportada como imagem!' : 'Não foi possível exportar a escalação.');
+    } catch {
+      showNotice('Não foi possível exportar a escalação.');
+    }
   }
 
   /* ─── photo handling ─── */
@@ -962,19 +1020,20 @@ export function FutApp({ orgId }: { orgId?: string }) {
             {isLive && showLive && (
               <Button variant="outline" onClick={() => setShowLiveManager(false)}>Fechar gestor</Button>
             )}
-            {/* Export button */}
+            {/* Export lineup as image */}
             {match.status !== 'scheduled' && (
               <div className="flex items-center gap-1">
                 <select
                   value={exportFormat}
                   onChange={(e) => setExportFormat(e.target.value as 'png' | 'jpeg')}
+                  aria-label="Formato da imagem da escalação"
                   className="h-9 rounded-lg border border-input bg-background px-2 text-xs font-bold"
                 >
                   <option value="png">PNG</option>
                   <option value="jpeg">JPEG</option>
                 </select>
-                <Button variant="outline" size="sm" onClick={() => handleExportLineup(match)}>
-                  <Download className="size-4" />
+                <Button variant="outline" size="sm" onClick={() => handleExportLineup(match)} title="Baixar a escalação em imagem">
+                  <Download className="size-4" /> Escalação
                 </Button>
               </div>
             )}
@@ -1573,7 +1632,7 @@ export function FutApp({ orgId }: { orgId?: string }) {
                   <button
                     key={opt.value}
                     type="button"
-                    onClick={() => setMatchForm({ ...matchForm, format: opt.value })}
+                    onClick={() => { setMatchForm({ ...matchForm, format: opt.value }); setFormationA(''); setFormationB(''); setPreviewTeams(null); setSwapPick(null); setDragPositions({}); }}
                     className={`flex-1 rounded-xl border-2 px-3 py-2.5 text-sm font-bold transition-all ${
                       matchForm.format === opt.value
                         ? 'border-primary bg-primary/10 text-primary'
@@ -1665,8 +1724,8 @@ export function FutApp({ orgId }: { orgId?: string }) {
                     </div>
                   </div>
                   <DraggablePitch
-                    teamA={previewTeamAPlayers}
-                    teamB={previewTeamBPlayers}
+                    teamA={previewTeamAPlayers.filter((p) => !validBench.includes(p.id))}
+                    teamB={previewTeamBPlayers.filter((p) => !validBench.includes(p.id))}
                     teamAName="Time Verde"
                     teamBName="Time Branco"
                     compact
@@ -1675,13 +1734,52 @@ export function FutApp({ orgId }: { orgId?: string }) {
                     fieldPositions={dragPositions}
                     onPositionsChange={setDragPositions}
                   />
+
+                  {/* Seletor de esquema por time */}
+                  <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                    {(['A', 'B'] as const).map((team) => {
+                      const value = team === 'A' ? resolvedFormationA : resolvedFormationB;
+                      const setValue = team === 'A' ? setFormationA : setFormationB;
+                      const color = team === 'A' ? '#16a34a' : '#3b82f6';
+                      const teamName = team === 'A' ? 'Time Verde' : 'Time Branco';
+                      const playersOnField = team === 'A' ? previewTeamAPlayers : previewTeamBPlayers;
+                      return (
+                        <div key={team} className="rounded-xl border border-border bg-background/70 p-2.5">
+                          <div className="mb-2 flex items-center justify-between gap-2">
+                            <p className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-[.14em]" style={{ color }}>
+                              <span className="size-2 rounded-full" style={{ background: color }} />
+                              {teamName} · esquema
+                            </p>
+                            {!teamHasKeeper(playersOnField.map((p) => p.id)) && (
+                              <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-[9px] font-black text-amber-500">sem goleiro</span>
+                            )}
+                          </div>
+                          <select
+                            value={value}
+                            onChange={(e) => { setValue(e.target.value); setDragPositions({}); }}
+                            aria-label={`Esquema do ${teamName}`}
+                            className="form-control h-9 text-xs font-bold"
+                          >
+                            {formationsForFormat.map((option) => (
+                              <option key={option.id} value={option.id}>{option.label}</option>
+                            ))}
+                          </select>
+                          <p className="mt-1.5 text-[10px] leading-snug text-muted-foreground">
+                            {formationsForFormat.find((option) => option.id === value)?.hint}
+                          </p>
+                        </div>
+                      );
+                    })}
+                  </div>
                   <div className="mt-4 grid gap-3 sm:grid-cols-2">
                     {(['A', 'B'] as const).map((team) => {
                       const teamName = team === 'A' ? 'Time Verde' : 'Time Branco';
-                      const teamPlayers = team === 'A' ? previewTeamAPlayers : previewTeamBPlayers;
+                      const teamPlayers = (team === 'A' ? previewTeamAPlayers : previewTeamBPlayers).filter(
+                        (p) => !validBench.includes(p.id),
+                      );
                       return (
                         <div key={team} className="rounded-xl border border-border bg-background/70 p-2.5">
-                          <p className="mb-2 text-[10px] font-black uppercase tracking-[.14em] text-muted-foreground">{teamName}</p>
+                          <p className="mb-2 text-[10px] font-black uppercase tracking-[.14em] text-muted-foreground">{teamName} · {teamPlayers.length} em campo</p>
                           <div className="flex flex-wrap gap-1.5">
                             {teamPlayers.map((p) => {
                               const active = swapPick === p.id;
@@ -1703,7 +1801,58 @@ export function FutApp({ orgId }: { orgId?: string }) {
                       );
                     })}
                   </div>
-                  <div className="mt-3 flex items-center justify-center gap-2 rounded-xl bg-muted/70 px-3 py-2 text-[10px] font-bold text-muted-foreground"><Menu className="size-3" /> {swapPick ? 'Agora toque no segundo jogador para trocá-los' : 'Arraste para ajustar a posição · toque em 2 jogadores para trocar de time'}</div>
+
+                  {/* Banco de reservas */}
+                  <div className="mt-3 rounded-xl border border-dashed border-border bg-muted/30 p-2.5">
+                    <p className="mb-2 text-[10px] font-black uppercase tracking-[.14em] text-muted-foreground">
+                      Banco · {validBench.length} {validBench.length === 1 ? 'reserva' : 'reservas'}
+                    </p>
+                    {validBench.length > 0 && (
+                      <div className="flex flex-wrap gap-1.5">
+                        {validBench.map((id) => {
+                          const player = playerById(id);
+                          if (!player) return null;
+                          return (
+                            <button
+                              key={id}
+                              type="button"
+                              onClick={() => toggleBench(id)}
+                              title="Devolver ao time em campo"
+                              className="flex items-center gap-1.5 rounded-lg border border-border bg-background px-2 py-1.5 text-xs font-bold opacity-80 transition hover:opacity-100"
+                            >
+                              <PlayerAvatar player={player} size="sm" />
+                              {player.nickname}
+                              <X className="size-3" />
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                    <p className="mt-1.5 text-[10px] text-muted-foreground">
+                      Toque em um jogador abaixo para mandá-lo ao banco.
+                    </p>
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      {matchForm.selected
+                        .filter((id) => !validBench.includes(id))
+                        .map((id) => {
+                          const player = playerById(id);
+                          if (!player) return null;
+                          return (
+                            <button
+                              key={id}
+                              type="button"
+                              onClick={() => toggleBench(id)}
+                              title="Mover para o banco"
+                              className="rounded-lg border border-border/60 bg-muted/40 px-2 py-1 text-[11px] font-semibold text-muted-foreground transition hover:border-amber-500/50 hover:text-amber-500"
+                            >
+                              {player.nickname}
+                            </button>
+                          );
+                        })}
+                    </div>
+                  </div>
+
+                  <div className="mt-3 flex items-center justify-center gap-2 rounded-xl bg-muted/70 px-3 py-2 text-[10px] font-bold text-muted-foreground"><Menu className="size-3" /> {swapPick ? 'Agora toque no segundo jogador para trocá-los de time' : 'Arraste no campo para ajustar a posição · toque em 2 jogadores para trocar de time'}</div>
                 </div>
               )}
             </div>

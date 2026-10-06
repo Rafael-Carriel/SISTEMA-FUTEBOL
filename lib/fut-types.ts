@@ -1,6 +1,14 @@
 export type Position = 'GOL' | 'ZAG' | 'MEI' | 'ATA';
 
-export type MatchFormat = 'F5' | 'F7' | 'F11';
+export type MatchFormat = 'F5' | 'F6' | 'F7' | 'F11';
+
+/** Formatos disponíveis na criação da partida, com quantos jogadores vão a campo. */
+export const MATCH_FORMATS: Array<{ value: MatchFormat; label: string; players: number }> = [
+  { value: 'F5', label: 'Futsal (5)', players: 5 },
+  { value: 'F6', label: 'Fut6 (6)', players: 6 },
+  { value: 'F7', label: 'Fut7 (7)', players: 7 },
+  { value: 'F11', label: 'Campo (11)', players: 11 },
+];
 
 export type Player = {
   id: string;
@@ -58,6 +66,11 @@ export type Match = {
   events: MatchEvent[];
   createdAt: string;
   format?: MatchFormat;
+  /** Esquema tático escolhido para cada time (ver lib/formation-layout). */
+  formationA?: string;
+  formationB?: string;
+  /** Confirmados que ficaram no banco (não entram em campo). */
+  bench?: string[];
   fieldPositions?: FieldPositions;
   startedAt?: string;
   goalkeeperAId?: string;
@@ -85,15 +98,6 @@ export type PlayerStats = {
   draws: number;
   losses: number;
   overall: number;
-};
-
-export type LineupExportOptions = {
-  format: 'png' | 'jpeg';
-  quality?: number;
-  width?: number;
-  height?: number;
-  includeNames?: boolean;
-  includeNumbers?: boolean;
 };
 
 export type Role = 'admin' | 'member';
