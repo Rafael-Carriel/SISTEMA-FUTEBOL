@@ -6,6 +6,7 @@ import {
   assignFormationPositions,
   defaultFormationId,
   getFormation,
+  keepPlayersInsideField,
   listFormations,
 } from '../formation-layout';
 import { LINEUP_FIELD } from '../lineup-export';
@@ -182,5 +183,20 @@ describe('assignFormationPlayers', () => {
     const rows = 4;
     const halfNeed = (rows - 1) * (radius * 2 + 24) + chipHeight + radius;
     expect(LINEUP_FIELD.h / 2).toBeGreaterThan(halfNeed);
+  });
+});
+
+
+describe('margens do campo', () => {
+  it('mantém os jogadores dentro das laterais sem mudar a profundidade', () => {
+    const placed = [
+      { player: makePlayer('left', 'ATA'), x: 0, y: 26 },
+      { player: makePlayer('right', 'ATA'), x: 100, y: 26 },
+      { player: makePlayer('keeper', 'GOL'), x: 50, y: 91 },
+    ];
+    const result = keepPlayersInsideField(placed);
+    expect(result.map(({ x }) => x)).toEqual([10, 90, 50]);
+    expect(result.map(({ y }) => y)).toEqual([26, 26, 91]);
+    expect(placed[0].x).toBe(0);
   });
 });

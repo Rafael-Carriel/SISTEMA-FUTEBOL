@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Activity, GripVertical, MousePointer2, Sparkles } from 'lucide-react';
 import type { Player, MatchFormat, FieldPositions } from '@/lib/fut-types';
-import { assignFormationPositions } from '@/lib/formation-layout';
+import { assignFormationPositions, keepPlayersInsideField } from '@/lib/formation-layout';
 import { calcOverall } from '@/lib/player-rating';
 import { readableTextColor } from '@/lib/color-utils';
 
@@ -388,8 +388,8 @@ export function DraggablePitch({
     if (fieldPositions && Object.keys(fieldPositions).length > 0) {
       setPositions(fieldPositions);
     } else {
-      const defaultsA = assignFormationPositions(cleanTeamA, format);
-      const defaultsB = assignFormationPositions(cleanTeamB, format);
+      const defaultsA = keepPlayersInsideField(assignFormationPositions(cleanTeamA, format));
+      const defaultsB = keepPlayersInsideField(assignFormationPositions(cleanTeamB, format));
       const initial: FieldPositions = {};
       [...defaultsA, ...defaultsB].forEach(({ player, x, y }) => {
         initial[player.id] = { x, y };

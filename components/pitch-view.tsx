@@ -3,7 +3,7 @@
 import { useMemo } from 'react';
 import { Activity, Radio, Sparkles } from 'lucide-react';
 import type { MatchFormat, Player } from '@/lib/fut-types';
-import { assignFormationPositions } from '@/lib/formation-layout';
+import { assignFormationPositions, keepPlayersInsideField } from '@/lib/formation-layout';
 import { calcOverall } from '@/lib/player-rating';
 import { readableTextColor, teamAccent } from '@/lib/color-utils';
 
@@ -249,8 +249,14 @@ export function PitchView({
   const cleanTeamA = useMemo(() => dedupePlayers(teamA), [teamA]);
   const blocked = useMemo(() => new Set(cleanTeamA.map(playerIdentity)), [cleanTeamA]);
   const cleanTeamB = useMemo(() => dedupePlayers(teamB, blocked), [teamB, blocked]);
-  const placedA = useMemo(() => assignFormationPositions(cleanTeamA, format, goalkeeperAId), [cleanTeamA, format, goalkeeperAId]);
-  const placedB = useMemo(() => assignFormationPositions(cleanTeamB, format, goalkeeperBId), [cleanTeamB, format, goalkeeperBId]);
+  const placedA = useMemo(
+    () => keepPlayersInsideField(assignFormationPositions(cleanTeamA, format, goalkeeperAId)),
+    [cleanTeamA, format, goalkeeperAId],
+  );
+  const placedB = useMemo(
+    () => keepPlayersInsideField(assignFormationPositions(cleanTeamB, format, goalkeeperBId)),
+    [cleanTeamB, format, goalkeeperBId],
+  );
 
   // Adjust dimensions based on format
   const getDimensions = () => {
@@ -263,9 +269,11 @@ export function PitchView({
   const { w, h } = getDimensions();
 
   return (
-    <div className="premium-lineup-shell flex w-full flex-col justify-center gap-6 p-3 sm:flex-row sm:p-5">
+    <div className="premium-lineup-shell w-full min-w-0 p-3">
+      <div className="pitch-team-grid">
       <PitchHalf teamName={teamAName} teamColor={teamAColor} players={placedA} w={w} h={h} compact={compact} flip={false} format={format} goalkeeperId={goalkeeperAId} />
       <PitchHalf teamName={teamBName} teamColor={teamBColor} players={placedB} w={w} h={h} compact={compact} flip={false} format={format} goalkeeperId={goalkeeperBId} />
+      </div>
     </div>
   );
 }
@@ -284,8 +292,14 @@ export function FullPitchView({
   const cleanTeamA = useMemo(() => dedupePlayers(teamA), [teamA]);
   const blocked = useMemo(() => new Set(cleanTeamA.map(playerIdentity)), [cleanTeamA]);
   const cleanTeamB = useMemo(() => dedupePlayers(teamB, blocked), [teamB, blocked]);
-  const placedA = useMemo(() => assignFormationPositions(cleanTeamA, format, goalkeeperAId), [cleanTeamA, format, goalkeeperAId]);
-  const placedB = useMemo(() => assignFormationPositions(cleanTeamB, format, goalkeeperBId), [cleanTeamB, format, goalkeeperBId]);
+  const placedA = useMemo(
+    () => keepPlayersInsideField(assignFormationPositions(cleanTeamA, format, goalkeeperAId)),
+    [cleanTeamA, format, goalkeeperAId],
+  );
+  const placedB = useMemo(
+    () => keepPlayersInsideField(assignFormationPositions(cleanTeamB, format, goalkeeperBId)),
+    [cleanTeamB, format, goalkeeperBId],
+  );
 
   return (
     <div className="full-pitch-experience">

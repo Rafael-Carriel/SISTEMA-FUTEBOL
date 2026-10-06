@@ -427,3 +427,41 @@ export function assignFormationPositions(
 ): FormationPlayer[] {
   return assignFormationPlayers(players, format, undefined, goalkeeperId);
 }
+
+export interface PlacedPlayer {
+  player: Player;
+  x: number;
+  y: number;
+}
+
+/**
+ * Mantém o desenho do esquema mas garante margem nas laterais.
+ *
+ * O esquema usa X de 0 a 100, e 0 significa "na linha lateral": com o campo
+ * pequeno a camisa fica cortada pela borda (e o número, que sai do círculo,
+ * piora). Aqui as posições são comprimidas para dentro de `[margin, 100 - margin]`
+ * preservando a ordem e as distâncias relativas — a formação continua a mesma, só
+ * que inteira dentro das quatro linhas. O goleiro fica no meio da meta.
+ */
+export function keepPlayersInsideField<T extends PlacedPlayer>(placed: T[], margin = 10): T[] {
+  if (!placed.length) return placed;
+
+  const outfield = placed.filter((item) => item.player.position !== 'GOL');
+  if (!outfield.length) return placed.map((item) => ({ ...item, x: 50 }));
+
+  const min = Math.min(...outfield.map((item) => item.x));
+  const max = Math.max(...outfield.map((item) => item.x));
+  const span = max - min;
+  const usable = 100 - margin * 2;
+  const scale = span > usable ? usable / span : 1;
+  const centre = (min + max) / 2;
+
+  const spread = new Map(
+    outfield.map((item) => [item.player.id, Math.max(margin, Math.min(100 - margin, 50 + (item.x - centre) * scale))]),
+  );
+
+  return placed.map((item) => {
+    if (item.player.position === 'GOL') return { ...item, x: 50 };
+    return { ...item, x: spread.get(item.player.id) ?? item.x };
+  });
+}

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { arrayUnion, collection, deleteDoc, deleteField, doc, getDocs, increment, onSnapshot, query, setDoc, updateDoc, where, writeBatch } from 'firebase/firestore';
 import { Activity, BadgeDollarSign, CalendarDays, Camera, Check, ChevronRight, CircleDollarSign, Download, Expand, Frown, Goal, ImageDown, LayoutDashboard, Medal, Menu, Monitor, Moon, Pencil, Plus, RectangleVertical, Repeat, Save, Shield, ShieldCheck, Shirt, Sparkles, Sun, Swords, Target, Trash2, Trophy, UserPlus, Users, WalletCards, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -432,8 +432,12 @@ export function FutApp({ orgId }: { orgId?: string }) {
     try { await setDoc(doc(db, 'payments', id), withOrg(next)); } catch { /* offline */ }
   }
 
+  const addingAvulso = useRef(false);
+
   async function addAvulso(): Promise<string | null> {
+    if (addingAvulso.current) return null;
     if (!avulsoName.trim()) { showNotice('Digite o nome do avulso.'); return null; }
+    addingAvulso.current = true;
     const id = `avulso_${paymentMonth}_${crypto.randomUUID().slice(0, 8)}`;
     const name = avulsoName.trim();
     const avulsoPlayer: Player = {
@@ -446,16 +450,19 @@ export function FutApp({ orgId }: { orgId?: string }) {
     };
     const payment: Payment = { id: `${paymentMonth}_${id}`, playerId: id, month: paymentMonth, amount: avulsoValue, paid: false };
     try {
-      await setDoc(doc(db, 'players', id), withOrg(avulsoPlayer));
-      await setDoc(doc(db, 'payments', payment.id), withOrg(payment));
+      const batch = writeBatch(db);
+      batch.set(doc(db, 'players', id), withOrg(avulsoPlayer));
+      batch.set(doc(db, 'payments', payment.id), withOrg(payment));
+      await batch.commit();
     } catch { /* offline */ }
-    setPlayers((all) => [...all, avulsoPlayer]);
-    setPayments((all) => [...all, payment]);
+    setPlayers((all) => all.some((item) => item.id === id) ? all : [...all, avulsoPlayer]);
+    setPayments((all) => all.some((item) => item.id === payment.id) ? all : [...all, payment]);
     setAvulsoName('');
     setAvulsoMatchId('');
     setAvulsoValue(20);
     setShowAvulsoForm(false);
     showNotice(`${name} adicionado como avulso.`);
+    addingAvulso.current = false;
     return id;
   }
 
@@ -891,12 +898,12 @@ export function FutApp({ orgId }: { orgId?: string }) {
               </div>
               <Medal className="size-5 text-primary" />
             </div>
-            <div className="mt-4 flex gap-3">
+            <div className="mt-4 grid grid-cols-3 gap-2">
               {topScorers.map((item, index) => (
                 <button
                   key={item.player.id}
                   onClick={() => { setActivePlayerId(item.player.id); setDialog('playerCard'); }}
-                  className="flex flex-1 flex-col items-center gap-2 rounded-2xl border border-transparent bg-muted/50 p-3 transition hover:border-primary/40 hover:bg-muted"
+                  className="flex min-w-0 flex-col items-center gap-2 rounded-2xl border border-transparent bg-muted/50 p-3 transition hover:border-primary/40 hover:bg-muted"
                 >
                   <span
                     className="grid size-6 place-items-center rounded-full text-[10px] font-black text-surface-inverse"
@@ -1021,7 +1028,7 @@ export function FutApp({ orgId }: { orgId?: string }) {
               <Button variant="outline" onClick={() => setShowLiveManager(false)}>Fechar gestor</Button>
             )}
             {/* Export lineup as image */}
-            {match.status !== 'scheduled' && (
+            {(teamAPlayers.length > 0 || teamBPlayers.length > 0) && (
               <div className="flex items-center gap-1">
                 <select
                   value={exportFormat}
@@ -1033,7 +1040,7 @@ export function FutApp({ orgId }: { orgId?: string }) {
                   <option value="jpeg">JPEG</option>
                 </select>
                 <Button variant="outline" size="sm" onClick={() => handleExportLineup(match)} title="Baixar a escalação em imagem">
-                  <Download className="size-4" /> Escalação
+                  <Download className="size-4" /> Exportar times
                 </Button>
               </div>
             )}
@@ -1090,7 +1097,7 @@ export function FutApp({ orgId }: { orgId?: string }) {
                     teamB={teamBPlayers}
                     teamAName={match.teamAName}
                     teamBName={match.teamBName}
-                    compact={match.status !== 'finished'}
+                    compact={false}
                     format={match.format || 'F7'}
                     goalkeeperAId={match.goalkeeperAId}
                     goalkeeperBId={match.goalkeeperBId}
@@ -1301,7 +1308,7 @@ export function FutApp({ orgId }: { orgId?: string }) {
               <p className="eyebrow-muted">{currentMonthLabel}</p>
               <h3 className="mt-1 text-lg font-black">Controle de pagamentos</h3>
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-3">
               <select
                 value={paymentMonth}
                 onChange={(e) => setPaymentMonth(e.target.value)}
@@ -1329,7 +1336,7 @@ export function FutApp({ orgId }: { orgId?: string }) {
             {regularPlayers.map((player) => {
               const payment = filteredPayments.find((item) => item.playerId === player.id);
               return (
-                <div key={player.id} className="flex items-center gap-3 px-5 py-3">
+                <div key={player.id} className="payment-row flex flex-wrap items-center gap-3 px-5 py-3">
                   <PlayerAvatar player={player} />
                   <div className="min-w-0 flex-1">
                     <b>{player.nickname}</b>
@@ -1361,7 +1368,7 @@ export function FutApp({ orgId }: { orgId?: string }) {
                   const payment = filteredPayments.find((item) => item.playerId === player.id);
                   const match = player.matchId ? matches.find((m) => m.id === player.matchId) : null;
                   return (
-                    <div key={player.id} className="flex items-center gap-3 px-5 py-3">
+                    <div key={player.id} className="payment-row flex flex-wrap items-center gap-3 px-5 py-3">
                       <PlayerAvatar player={player} />
                       <div className="min-w-0 flex-1">
                         <b>{player.nickname}</b>
